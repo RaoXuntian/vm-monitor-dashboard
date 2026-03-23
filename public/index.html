@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VM Monitor Dashboard</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-badge">VM</div>
+        <div>
+          <div class="brand-title">CloudOps Monitor</div>
+          <div class="brand-subtitle">Local node telemetry</div>
+        </div>
+      </div>
+      <nav class="nav">
+        <a class="nav-item active" href="#">Overview</a>
+        <a class="nav-item" href="#cards">Resources</a>
+        <a class="nav-item" href="#charts">Charts</a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="muted">Retention</div>
+        <div>7 days rolling</div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="hero">
+        <div>
+          <div class="eyebrow">Infrastructure Overview</div>
+          <h1>VM performance dashboard</h1>
+          <p class="subtle">CPU, uptime, memory, network, and disk metrics collected locally from this Linux VM.</p>
+        </div>
+        <div class="toolbar">
+          <div class="range-picker" id="range-picker">
+            <button data-hours="1">1h</button>
+            <button data-hours="6">6h</button>
+            <button data-hours="24" class="active">24h</button>
+            <button data-hours="72">3d</button>
+            <button data-hours="168">7d</button>
+          </div>
+          <button class="ghost" id="refresh-btn">Refresh</button>
+        </div>
+      </header>
+
+      <section class="status-strip" id="status-strip">
+        <div class="status-pill"><span class="dot"></span> Collector active</div>
+        <div class="status-pill" id="hostname-pill">Hostname: --</div>
+        <div class="status-pill" id="updated-pill">Updated: --</div>
+      </section>
+
+      <section class="cards" id="cards">
+        <article class="card metric-card accent-cpu">
+          <div class="card-label">CPU usage</div>
+          <div class="metric-value" id="cpu-now">--</div>
+          <div class="metric-meta" id="cpu-meta">Load average --</div>
+        </article>
+        <article class="card metric-card accent-uptime">
+          <div class="card-label">Availability</div>
+          <div class="metric-value" id="availability-now">--</div>
+          <div class="metric-meta" id="uptime-meta">Uptime --</div>
+        </article>
+        <article class="card metric-card accent-memory">
+          <div class="card-label">Memory usage</div>
+          <div class="metric-value" id="memory-now">--</div>
+          <div class="metric-meta" id="memory-meta">-- / --</div>
+        </article>
+        <article class="card metric-card accent-network">
+          <div class="card-label">Network throughput</div>
+          <div class="metric-value" id="network-now">--</div>
+          <div class="metric-meta" id="network-meta">RX -- · TX --</div>
+        </article>
+        <article class="card metric-card accent-disk">
+          <div class="card-label">Disk usage</div>
+          <div class="metric-value" id="disk-now">--</div>
+          <div class="metric-meta" id="disk-meta">-- / --</div>
+        </article>
+      </section>
+
+      <section class="grid" id="charts">
+        <article class="card panel wide">
+          <div class="panel-header">
+            <div>
+              <h2>CPU & Memory</h2>
+              <p>Utilization trends over the selected range.</p>
+            </div>
+            <div class="legend">
+              <span><i class="legend-line cpu"></i>CPU</span>
+              <span><i class="legend-line memory"></i>Memory</span>
+            </div>
+          </div>
+          <div class="chart-wrap"><svg id="chart-utilization"></svg></div>
+        </article>
+
+        <article class="card panel">
+          <div class="panel-header">
+            <div>
+              <h2>Disk capacity</h2>
+              <p>Root volume usage.</p>
+            </div>
+          </div>
+          <div class="gauge" id="disk-gauge"></div>
+        </article>
+
+        <article class="card panel wide">
+          <div class="panel-header">
+            <div>
+              <h2>Network throughput</h2>
+              <p>Inbound and outbound bytes per second.</p>
+            </div>
+            <div class="legend">
+              <span><i class="legend-line rx"></i>Receive</span>
+              <span><i class="legend-line tx"></i>Transmit</span>
+            </div>
+          </div>
+          <div class="chart-wrap"><svg id="chart-network"></svg></div>
+        </article>
+      </section>
+    </main>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

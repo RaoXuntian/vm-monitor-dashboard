@@ -1,0 +1,14 @@
+{
+  "name": "vm-monitor-dashboard",
+  "version": "1.0.0",
+  "description": "Local VM monitoring dashboard with collector, REST API, and static frontend",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
