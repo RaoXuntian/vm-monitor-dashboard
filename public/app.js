@@ -259,6 +259,77 @@ function renderLineChart(id, series, defs, options) {
   }).join('');
 
   svg.innerHTML = `${grid}${lines}${timeLabels}`;
+
+  // Interactive hover tooltip
+  const overlayRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  overlayRect.setAttribute('x', pad.left);
+  overlayRect.setAttribute('y', pad.top);
+  overlayRect.setAttribute('width', innerW);
+  overlayRect.setAttribute('height', innerH);
+  overlayRect.setAttribute('fill', 'transparent');
+  overlayRect.style.cursor = 'crosshair';
+  svg.appendChild(overlayRect);
+
+  const cursorLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  cursorLine.setAttribute('y1', pad.top);
+  cursorLine.setAttribute('y2', pad.top + innerH);
+  cursorLine.setAttribute('stroke', 'rgba(255,255,255,0.25)');
+  cursorLine.setAttribute('stroke-dasharray', '4 3');
+  cursorLine.style.display = 'none';
+  svg.appendChild(cursorLine);
+
+  let tooltip = svg.parentElement.querySelector('.chart-tooltip');
+  if (!tooltip) {
+    tooltip = document.createElement('div');
+    tooltip.className = 'chart-tooltip';
+    svg.parentElement.style.position = 'relative';
+    svg.parentElement.appendChild(tooltip);
+  }
+
+  function findClosestPoint(clientX) {
+    const rect = svg.getBoundingClientRect();
+    const mouseX = clientX - rect.left;
+    const ts = minTs + ((mouseX - pad.left) / Math.max(1, innerW)) * (maxTs - minTs);
+    let closest = null;
+    let closestDist = Infinity;
+    for (const point of series) {
+      const dist = Math.abs(point.timestamp - ts);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closest = point;
+      }
+    }
+    return closest;
+  }
+
+  overlayRect.addEventListener('mousemove', (e) => {
+    const point = findClosestPoint(e.clientX);
+    if (!point) return;
+    const cx = x(point.timestamp);
+    cursorLine.setAttribute('x1', cx);
+    cursorLine.setAttribute('x2', cx);
+    cursorLine.style.display = '';
+
+    const time = new Date(point.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const vals = defs.map((def) => {
+      const v = point[def.key];
+      const formatted = options.formatter ? options.formatter(v) : (options.ySuffix ? `${(v ?? 0).toFixed(1)}${options.ySuffix}` : (v ?? 0).toFixed(1));
+      return `<span style="color:${def.color}">${def.key.replace(/Percent|Bps/g, '').replace(/([A-Z])/g, ' $1').trim()}: ${formatted}</span>`;
+    }).join('<br>');
+
+    tooltip.innerHTML = `<div class="tooltip-time">${time}</div>${vals}`;
+    tooltip.style.display = 'block';
+
+    const rect = svg.getBoundingClientRect();
+    const tooltipX = cx + pad.left > innerW * 0.7 ? cx - 160 : cx + 12;
+    tooltip.style.left = `${tooltipX}px`;
+    tooltip.style.top = `${pad.top + 8}px`;
+  });
+
+  overlayRect.addEventListener('mouseleave', () => {
+    cursorLine.style.display = 'none';
+    tooltip.style.display = 'none';
+  });
 }
 
 document.querySelectorAll('#range-picker button').forEach((btn) => {
