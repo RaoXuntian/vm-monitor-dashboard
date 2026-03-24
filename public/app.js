@@ -217,6 +217,13 @@ function renderGauge(value = 0, used, total) {
   `;
 }
 
+// Chart zoom state: px per data point (adjustable via pinch)
+const chartZoom = {
+  pxPerPoint: 12,   // default: ~1 minute feel at 10s sampling
+  min: 2,           // minimum: very compressed
+  max: 60,          // maximum: very spread out
+};
+
 function renderLineChart(id, series, defs, options) {
   const svg = $(id);
   const container = svg.parentElement;
@@ -224,9 +231,8 @@ function renderLineChart(id, series, defs, options) {
   const height = svg.clientHeight || 260;
   const pad = { top: 12, right: 14, bottom: 26, left: 14 };
 
-  // Scrollable: minimum 4px per data point, at least container width
-  const MIN_PX_PER_POINT = 4;
-  const dataWidth = Math.max(containerWidth, series.length * MIN_PX_PER_POINT);
+  // Scrollable width based on zoom level
+  const dataWidth = Math.max(containerWidth, series.length * chartZoom.pxPerPoint);
   const width = dataWidth;
 
   svg.setAttribute('width', width);
@@ -399,6 +405,51 @@ function renderLineChart(id, series, defs, options) {
   requestAnimationFrame(() => {
     container.scrollLeft = container.scrollWidth;
   });
+
+  // Pinch-to-zoom on touch + Ctrl+wheel on desktop
+  let pinchStartDist = 0;
+  let pinchStartZoom = chartZoom.pxPerPoint;
+
+  container.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      pinchStartDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      pinchStartZoom = chartZoom.pxPerPoint;
+    }
+  }, { passive: false });
+
+  container.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const scale = dist / Math.max(1, pinchStartDist);
+      const scrollRatio = container.scrollWidth > 0 ? container.scrollLeft / container.scrollWidth : 1;
+      chartZoom.pxPerPoint = Math.max(chartZoom.min, Math.min(chartZoom.max, pinchStartZoom * scale));
+      if (state.payload) render();
+      requestAnimationFrame(() => {
+        container.scrollLeft = scrollRatio * container.scrollWidth;
+      });
+    }
+  }, { passive: false });
+
+  container.addEventListener('wheel', (e) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      const scrollRatio = container.scrollWidth > 0 ? container.scrollLeft / container.scrollWidth : 1;
+      const delta = e.deltaY > 0 ? 0.85 : 1.18;
+      chartZoom.pxPerPoint = Math.max(chartZoom.min, Math.min(chartZoom.max, chartZoom.pxPerPoint * delta));
+      if (state.payload) render();
+      requestAnimationFrame(() => {
+        container.scrollLeft = scrollRatio * container.scrollWidth;
+      });
+    }
+  }, { passive: false });
 }
 
 document.querySelectorAll('#range-picker button').forEach((btn) => {
