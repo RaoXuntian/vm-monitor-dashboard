@@ -7,244 +7,226 @@
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <div class="app-shell" id="app-shell">
-    <aside class="sidebar">
+  <div class="app-shell">
+    <header class="topbar glass-card">
       <div>
-        <div class="brand">
-          <div class="brand-badge">VM</div>
+        <div class="eyebrow">Live VM monitor</div>
+        <h1>Bento operations dashboard</h1>
+        <p class="subtle">Realtime CPU, memory, network, storage, and OpenClaw / Weixin service visibility.</p>
+      </div>
+      <div class="topbar-actions">
+        <div class="live-pill" id="stream-status">Connecting stream…</div>
+        <div class="range-picker" id="range-picker">
+          <button data-hours="1">1h</button>
+          <button data-hours="6">6h</button>
+          <button data-hours="24" class="active">24h</button>
+          <button data-hours="72">3d</button>
+          <button data-hours="168">7d</button>
+        </div>
+        <button class="ghost" id="refresh-btn">Refresh</button>
+      </div>
+    </header>
+
+    <section class="status-strip">
+      <div class="status-pill" id="hostname-pill">Hostname: --</div>
+      <div class="status-pill" id="updated-pill">Updated: --</div>
+      <div class="status-pill" id="uptime-pill">Uptime: --</div>
+      <div class="status-pill" id="connections-pill">TCP: --</div>
+    </section>
+
+    <main class="bento-grid">
+      <article class="glass-card bento-card large cpu-card">
+        <div class="card-head">
           <div>
-            <div class="brand-title">CloudOps Monitor</div>
-            <div class="brand-subtitle">Local node telemetry</div>
+            <div class="card-label">CPU</div>
+            <div class="metric-value" id="cpu-now">--</div>
+            <div class="metric-meta" id="cpu-meta">Load --</div>
+          </div>
+          <div class="metric-stack right">
+            <div class="mini-stat">
+              <span>Peak</span>
+              <strong id="cpu-peak">--</strong>
+            </div>
+            <div class="mini-stat">
+              <span>Avg</span>
+              <strong id="cpu-avg">--</strong>
+            </div>
           </div>
         </div>
-
-        <nav class="nav">
-          <a class="nav-item active" href="#">Overview</a>
-          <a class="nav-item" href="#cards">Resources</a>
-          <a class="nav-item" href="#charts">Charts</a>
-        </nav>
-      </div>
-
-      <div class="sidebar-footer stack">
-        <div>
-          <div class="muted tiny">Retention</div>
-          <div>7 days rolling</div>
+        <div class="legend compact">
+          <span><i class="legend-line cpu"></i>CPU usage</span>
         </div>
-      </div>
-    </aside>
+        <div class="chart-wrap tall"><svg id="chart-cpu"></svg></div>
+      </article>
 
-    <main class="workspace">
-      <header class="topbar card">
-        <div>
-          <div class="eyebrow">Overview</div>
-          <h1>VM dashboard</h1>
-          <p class="subtle">Local CPU, memory, network, disk, and OpenClaw status.</p>
+      <article class="glass-card bento-card large memory-card">
+        <div class="card-head">
+          <div>
+            <div class="card-label">Memory</div>
+            <div class="metric-value" id="memory-now">--</div>
+            <div class="metric-meta" id="memory-meta">-- / --</div>
+          </div>
+          <div class="metric-stack right">
+            <div class="mini-stat">
+              <span>Used</span>
+              <strong id="memory-used">--</strong>
+            </div>
+            <div class="mini-stat">
+              <span>Total</span>
+              <strong id="memory-total">--</strong>
+            </div>
+          </div>
         </div>
-        <div class="topbar-actions">
-          <div class="user-chip">
-            <span class="user-chip-dot"></span>
-            Local operator
-          </div>
-          <div class="range-picker" id="range-picker">
-            <button data-hours="1">1h</button>
-            <button data-hours="6">6h</button>
-            <button data-hours="24" class="active">24h</button>
-            <button data-hours="72">3d</button>
-            <button data-hours="168">7d</button>
-          </div>
-          <button class="ghost" id="refresh-btn">Refresh</button>
+        <div class="legend compact">
+          <span><i class="legend-line memory"></i>Memory usage</span>
         </div>
-      </header>
+        <div class="chart-wrap tall"><svg id="chart-memory"></svg></div>
+      </article>
 
-      <section class="status-strip" id="status-strip">
-        <div class="status-pill"><span class="dot"></span> Collector active</div>
-        <div class="status-pill" id="hostname-pill">Hostname: --</div>
-        <div class="status-pill" id="updated-pill">Updated: --</div>
-      </section>
+      <article class="glass-card bento-card medium network-card">
+        <div class="card-head">
+          <div>
+            <div class="card-label">Network throughput</div>
+            <div class="metric-value" id="network-now">--</div>
+            <div class="metric-meta" id="network-meta">RX -- · TX --</div>
+          </div>
+        </div>
+        <div class="network-summary">
+          <div class="mini-stat"><span>TCP active</span><strong id="tcp-total">--</strong></div>
+          <div class="mini-stat"><span>Monthly inbound</span><strong id="monthly-in">--</strong></div>
+          <div class="mini-stat"><span>Monthly outbound</span><strong id="monthly-out">--</strong></div>
+        </div>
+        <div class="legend compact">
+          <span><i class="legend-line rx"></i>Inbound</span>
+          <span><i class="legend-line tx"></i>Outbound</span>
+        </div>
+        <div class="chart-wrap"><svg id="chart-network"></svg></div>
+      </article>
 
-      <section class="opclaw-metrics-grid">
-        <article class="card metric-card accent-uptime">
-          <div class="card-label">OpenClaw sessions</div>
-          <div class="metric-value" id="oc-sessions">--</div>
-          <div class="metric-meta" id="oc-heartbeat">Heartbeat --</div>
-        </article>
-        <article class="card metric-card accent-network">
-          <div class="card-label">Weixin accounts</div>
-          <div class="metric-value" id="wx-accounts">--</div>
-          <div class="metric-meta" id="wx-state-meta">State --</div>
-        </article>
-        <article class="card metric-card accent-cpu">
-          <div class="card-label">Gateway</div>
-          <div class="metric-value" id="gateway-status">--</div>
-          <div class="metric-meta" id="gateway-meta">--</div>
-        </article>
-      </section>
+      <article class="glass-card bento-card medium disk-card">
+        <div class="card-head">
+          <div>
+            <div class="card-label">Disk usage</div>
+            <div class="metric-value" id="disk-now">--</div>
+            <div class="metric-meta" id="disk-meta">-- / --</div>
+          </div>
+        </div>
+        <div class="gauge" id="disk-gauge"></div>
+      </article>
 
-      <section class="ops-grid">
-        <article class="card info-panel">
-          <div class="panel-header compact">
+      <article class="glass-card bento-card small info-card">
+        <div class="card-label">System info</div>
+        <div class="info-list" id="node-info"></div>
+      </article>
+
+      <article class="glass-card bento-card small info-card">
+        <div class="card-label">Uptime & availability</div>
+        <div class="metric-value" id="availability-now">--</div>
+        <div class="metric-meta" id="availability-meta">Uptime --</div>
+      </article>
+
+      <article class="glass-card bento-card small info-card">
+        <div class="card-label">Hostname</div>
+        <div class="metric-value hostname-value" id="hostname-value">--</div>
+        <div class="metric-meta" id="platform-meta">--</div>
+      </article>
+
+      <article class="glass-card bento-card small info-card">
+        <div class="card-label">Active connections</div>
+        <div class="metric-value" id="tcp-card-total">--</div>
+        <div class="ports-list" id="tcp-ports"></div>
+      </article>
+
+      <article class="glass-card bento-card service-card">
+        <div class="card-head service-head">
+          <div>
+            <div class="card-label">Service status</div>
+            <div class="service-subtle">Control OpenClaw Gateway and Weixin channel</div>
+          </div>
+        </div>
+        <div class="service-grid">
+          <div class="service-row">
             <div>
-              <h2>Node</h2>
+              <div class="service-name">OpenClaw Gateway</div>
+              <div class="service-detail" id="gateway-detail">--</div>
+            </div>
+            <div class="service-actions">
+              <span class="status-badge unknown" id="gateway-badge">Unknown</span>
+              <button class="action-btn" data-action="openclaw-restart">Restart</button>
+              <button class="action-btn secondary" data-action="openclaw-logs">View Logs</button>
             </div>
           </div>
-          <div class="info-list" id="node-info"></div>
-        </article>
-
-        <article class="card info-panel">
-          <div class="panel-header compact">
+          <div class="service-row">
             <div>
-              <h2>Alerts</h2>
+              <div class="service-name">Weixin Channel</div>
+              <div class="service-detail" id="weixin-detail">--</div>
+            </div>
+            <div class="service-actions">
+              <span class="status-badge unknown" id="weixin-badge">Unknown</span>
+              <button class="action-btn" data-action="weixin-restart">Restart</button>
+              <button class="action-btn secondary" data-action="weixin-logs">View Logs</button>
             </div>
           </div>
-          <div class="alert-list" id="alert-list"></div>
-        </article>
+        </div>
+        <div class="service-extra">
+          <div class="mini-stat"><span>Gateway service</span><strong id="gateway-service-name">--</strong></div>
+          <div class="mini-stat"><span>Sessions</span><strong id="gateway-sessions">--</strong></div>
+          <div class="mini-stat"><span>Version</span><strong id="gateway-version">--</strong></div>
+        </div>
+      </article>
 
-        <article class="card info-panel">
-          <div class="panel-header compact">
-            <div>
-              <h2>OpenClaw</h2>
-            </div>
+      <article class="glass-card bento-card table-card">
+        <div class="card-head compact-head">
+          <div>
+            <div class="card-label">Alerts</div>
           </div>
-          <div class="alert-list" id="services-list"></div>
-          <div class="subpanel-title">Weixin accounts</div>
-          <div class="table-shell compact-table">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Account</th>
-                  <th>Status</th>
-                  <th>Notes</th>
-                </tr>
-              </thead>
-              <tbody id="weixin-accounts-table"></tbody>
-            </table>
-          </div>
-        </article>
-      </section>
+        </div>
+        <div class="alert-list" id="alert-list"></div>
+      </article>
 
-      <section class="cards" id="cards">
-        <article class="card metric-card accent-cpu">
-          <div class="card-label">CPU</div>
-          <div class="metric-value" id="cpu-now">--</div>
-          <div class="metric-meta" id="cpu-meta">Load --</div>
-        </article>
-        <article class="card metric-card accent-uptime">
-          <div class="card-label">Availability</div>
-          <div class="metric-value" id="availability-now">--</div>
-          <div class="metric-meta" id="uptime-meta">Uptime --</div>
-        </article>
-        <article class="card metric-card accent-memory">
-          <div class="card-label">Memory</div>
-          <div class="metric-value" id="memory-now">--</div>
-          <div class="metric-meta" id="memory-meta">-- / --</div>
-        </article>
-        <article class="card metric-card accent-network">
-          <div class="card-label">Network</div>
-          <div class="metric-value" id="network-now">--</div>
-          <div class="metric-meta" id="network-meta">RX -- · TX --</div>
-        </article>
-        <article class="card metric-card accent-disk">
-          <div class="card-label">Disk</div>
-          <div class="metric-value" id="disk-now">--</div>
-          <div class="metric-meta" id="disk-meta">-- / --</div>
-        </article>
-      </section>
+      <article class="glass-card bento-card table-card">
+        <div class="card-head compact-head">
+          <div>
+            <div class="card-label">Top processes</div>
+          </div>
+        </div>
+        <div class="table-shell">
+          <table class="data-table">
+            <thead>
+              <tr><th>PID</th><th>Process</th><th>CPU</th><th>MEM</th></tr>
+            </thead>
+            <tbody id="process-table"></tbody>
+          </table>
+        </div>
+      </article>
 
-      <section class="grid" id="charts">
-        <article class="card panel wide">
-          <div class="panel-header">
-            <div>
-              <h2>CPU & Memory</h2>
-              <p>5-minute intervals over selected range.</p>
-            </div>
-            <div class="legend">
-              <span><i class="legend-line cpu"></i>CPU</span>
-              <span><i class="legend-line memory"></i>Memory</span>
-            </div>
+      <article class="glass-card bento-card table-card">
+        <div class="card-head compact-head">
+          <div>
+            <div class="card-label">Filesystems</div>
           </div>
-          <div class="chart-wrap"><svg id="chart-utilization"></svg></div>
-        </article>
-
-        <article class="card panel panel-highlight">
-          <div class="panel-header">
-            <div>
-              <h2>Disk</h2>
-              <p>Root volume.</p>
-            </div>
-          </div>
-          <div class="gauge" id="disk-gauge"></div>
-        </article>
-
-        <article class="card panel wide">
-          <div class="panel-header">
-            <div>
-              <h2>Network throughput</h2>
-              <p>5-minute intervals, bytes per second.</p>
-            </div>
-            <div class="legend">
-              <span><i class="legend-line rx"></i>Receive</span>
-              <span><i class="legend-line tx"></i>Transmit</span>
-            </div>
-          </div>
-          <div class="chart-wrap"><svg id="chart-network"></svg></div>
-        </article>
-      </section>
-
-      <section class="control-grid">
-        <article class="card panel openclaw-panel">
-          <div class="panel-header compact">
-            <div>
-              <h2>OpenClaw control plane</h2>
-            </div>
-          </div>
-          <div class="info-list" id="openclaw-overview"></div>
-        </article>
-      </section>
-
-      <section class="lower-grid">
-        <article class="card panel">
-          <div class="panel-header compact">
-            <div>
-              <h2>Top processes</h2>
-            </div>
-          </div>
-          <div class="table-shell">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>PID</th>
-                  <th>Process</th>
-                  <th>CPU</th>
-                  <th>MEM</th>
-                </tr>
-              </thead>
-              <tbody id="process-table"></tbody>
-            </table>
-          </div>
-        </article>
-
-        <article class="card panel">
-          <div class="panel-header compact">
-            <div>
-              <h2>Filesystems</h2>
-            </div>
-          </div>
-          <div class="table-shell">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Mount</th>
-                  <th>Used</th>
-                  <th>Total</th>
-                  <th>Usage</th>
-                </tr>
-              </thead>
-              <tbody id="mounts-table"></tbody>
-            </table>
-          </div>
-        </article>
-      </section>
+        </div>
+        <div class="table-shell">
+          <table class="data-table">
+            <thead>
+              <tr><th>Mount</th><th>Used</th><th>Total</th><th>Usage</th></tr>
+            </thead>
+            <tbody id="mounts-table"></tbody>
+          </table>
+        </div>
+      </article>
     </main>
+  </div>
+
+  <div class="modal hidden" id="log-modal">
+    <div class="modal-backdrop" data-close="modal"></div>
+    <div class="modal-panel glass-card">
+      <div class="modal-head">
+        <h2 id="modal-title">Logs</h2>
+        <button class="ghost small" id="modal-close">Close</button>
+      </div>
+      <pre class="log-output" id="log-output">Loading…</pre>
+    </div>
   </div>
 
   <script src="/app.js"></script>

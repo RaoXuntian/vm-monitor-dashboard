@@ -1,10 +1,12 @@
 const state = {
   rangeHours: 24,
   payload: null,
+  eventSource: null,
+  pendingConfirmAction: null,
 };
 
 const $ = (id) => document.getElementById(id);
-const fmtPct = (n) => n == null ? '--' : `${n.toFixed(1)}%`;
+const fmtPct = (n) => n == null ? '--' : `${Number(n).toFixed(1)}%`;
 const fmtNum = (n, digits = 2) => n == null ? '--' : Number(n).toFixed(digits);
 
 function formatBytes(bytes) {
@@ -14,7 +16,7 @@ function formatBytes(bytes) {
   let i = 0;
   while (value >= 1024 && i < units.length - 1) {
     value /= 1024;
-    i++;
+    i += 1;
   }
   return `${value.toFixed(value >= 100 || i === 0 ? 0 : 1)} ${units[i]}`;
 }
@@ -34,6 +36,15 @@ function formatDuration(sec) {
   return `${m}m`;
 }
 
+function setText(id, value) {
+  const el = $(id);
+  if (el) el.textContent = value;
+}
+
+function escapeHtml(text) {
+  return String(text ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+}
+
 function setActiveRange(hours) {
   state.rangeHours = hours;
   document.querySelectorAll('#range-picker button').forEach((btn) => {
@@ -42,148 +53,147 @@ function setActiveRange(hours) {
 }
 
 async function loadData() {
-  const res = await fetch(`/api/metrics?hours=${state.rangeHours}`);
+  const res = await fetch(`/api/metrics?hours=${state.rangeHours}`, { cache: 'no-store' });
   state.payload = await res.json();
   render();
 }
 
+function updateStreamStatus(label, healthy = false) {
+  const el = $('stream-status');
+  el.textContent = label;
+  el.classList.toggle('healthy', healthy);
+}
+
+function getLatestNetworkPoint(series) {
+  return [...(series || [])].reverse().find((point) => Number.isFinite(point.networkRxRateBps) || Number.isFinite(point.networkTxRateBps));
+}
+
 function render() {
   const payload = state.payload;
+  if (!payload) return;
   const summary = payload.summary;
   const latest = summary?.latest;
+  const services = payload.services || latest?.openclaw || {};
   const series = payload.series || [];
-  $('hostname-pill').textContent = `Hostname: ${latest?.hostname || '--'}`;
-  $('updated-pill').textContent = `Updated: ${latest ? new Date(latest.timestamp).toLocaleString() : '--'}`;
+  const lastNet = getLatestNetworkPoint(series);
+  const monthlyTraffic = payload.monthlyTraffic || latest?.monthlyTraffic || { inbound: 0, outbound: 0, month: '--' };
+  const tcpConnections = payload.tcpConnections || latest?.tcpConnections || { total: 0, byPort: [] };
 
-  $('cpu-now').textContent = fmtPct(latest?.cpu?.usagePercent ?? summary?.averages?.cpuUsagePercent);
-  $('cpu-meta').textContent = `Load ${fmtNum(latest?.cpu?.load1)} · ${latest?.cpu?.cores || '--'} cores`;
+  setText('hostname-pill', `Hostname: ${latest?.hostname || '--'}`);
+  setText('updated-pill', `Updated: ${latest ? new Date(latest.timestamp).toLocaleString() : '--'}`);
+  setText('uptime-pill', `Uptime: ${formatDuration(latest?.uptimeSec)}`);
+  setText('connections-pill', `TCP: ${tcpConnections.total ?? '--'}`);
 
-  $('availability-now').textContent = fmtPct(summary?.availabilityPercent);
-  $('uptime-meta').textContent = `Uptime ${formatDuration(latest?.uptimeSec)}`;
+  setText('cpu-now', fmtPct(latest?.cpu?.usagePercent ?? summary?.averages?.cpuUsagePercent));
+  setText('cpu-meta', `Load ${fmtNum(latest?.cpu?.load1)} · ${latest?.cpu?.cores || '--'} cores`);
+  setText('cpu-peak', fmtPct(summary?.peak?.cpuUsagePercent));
+  setText('cpu-avg', fmtPct(summary?.averages?.cpuUsagePercent));
 
-  $('memory-now').textContent = fmtPct(latest?.memory?.usagePercent);
-  $('memory-meta').textContent = `${formatBytes(latest?.memory?.used)} / ${formatBytes(latest?.memory?.total)}`;
+  setText('memory-now', fmtPct(latest?.memory?.usagePercent));
+  setText('memory-meta', `${formatBytes(latest?.memory?.used)} / ${formatBytes(latest?.memory?.total)}`);
+  setText('memory-used', formatBytes(latest?.memory?.used));
+  setText('memory-total', formatBytes(latest?.memory?.total));
 
-  const lastNet = [...series].reverse().find((point) => Number.isFinite(point.networkRxRateBps) || Number.isFinite(point.networkTxRateBps));
-  $('network-now').textContent = `${formatRate(lastNet?.networkRxRateBps)} ↓`;
-  $('network-meta').textContent = `RX ${formatRate(lastNet?.networkRxRateBps)} · TX ${formatRate(lastNet?.networkTxRateBps)}`;
+  setText('network-now', `${formatRate(lastNet?.networkRxRateBps)} ↓`);
+  setText('network-meta', `RX ${formatRate(lastNet?.networkRxRateBps)} · TX ${formatRate(lastNet?.networkTxRateBps)}`);
+  setText('tcp-total', String(tcpConnections.total ?? '--'));
+  setText('monthly-in', formatBytes(monthlyTraffic.inbound));
+  setText('monthly-out', formatBytes(monthlyTraffic.outbound));
 
-  $('disk-now').textContent = fmtPct(latest?.disk?.usagePercent);
-  $('disk-meta').textContent = `${formatBytes(latest?.disk?.used)} / ${formatBytes(latest?.disk?.total)}`;
+  setText('disk-now', fmtPct(latest?.disk?.usagePercent));
+  setText('disk-meta', `${formatBytes(latest?.disk?.used)} / ${formatBytes(latest?.disk?.total)}`);
+
+  setText('availability-now', fmtPct(summary?.availabilityPercent));
+  setText('availability-meta', `Uptime ${formatDuration(latest?.uptimeSec)}`);
+
+  setText('hostname-value', latest?.hostname || '--');
+  setText('platform-meta', `${latest?.platform || '--'} · ${latest?.arch || '--'}`);
+  setText('tcp-card-total', `${tcpConnections.total ?? '--'}`);
 
   renderNodeInfo(payload.node);
+  renderTcpPorts(tcpConnections.byPort || []);
   renderAlerts(payload.alerts || []);
-  renderServices(payload.services || null);
-  renderOpenClawOverview(payload.services || null);
-  renderOpenClawMetricCards(payload.services || null);
   renderProcesses(payload.topProcesses || []);
   renderMounts(payload.mounts || []);
+  renderServices(services);
+  renderGauge(latest?.disk?.usagePercent, latest?.disk?.used, latest?.disk?.total);
 
-  renderLineChart('chart-utilization', series, [
-    { key: 'cpuUsagePercent', color: '#61a8ff', fill: 'rgba(97,168,255,.18)' },
-    { key: 'memoryUsagePercent', color: '#c28cff', fill: 'rgba(194,140,255,.14)' },
+  renderLineChart('chart-cpu', series, [
+    { key: 'cpuUsagePercent', color: '#61a8ff', gradientId: 'cpuGradient', fillFrom: 'rgba(97,168,255,0.40)', fillTo: 'rgba(97,168,255,0.02)', label: 'CPU' },
+  ], { yMin: 0, yMax: 100, ySuffix: '%' });
+
+  renderLineChart('chart-memory', series, [
+    { key: 'memoryUsagePercent', color: '#c28cff', gradientId: 'memoryGradient', fillFrom: 'rgba(194,140,255,0.38)', fillTo: 'rgba(194,140,255,0.02)', label: 'Memory' },
   ], { yMin: 0, yMax: 100, ySuffix: '%' });
 
   const networkMax = Math.max(1, ...series.flatMap((point) => [point.networkRxRateBps || 0, point.networkTxRateBps || 0]));
   renderLineChart('chart-network', series, [
-    { key: 'networkRxRateBps', color: '#63e2c6', fill: 'rgba(99,226,198,.14)' },
-    { key: 'networkTxRateBps', color: '#f6c760', fill: 'rgba(246,199,96,.10)' },
+    { key: 'networkRxRateBps', color: '#63e2c6', gradientId: 'rxGradient', fillFrom: 'rgba(99,226,198,0.36)', fillTo: 'rgba(99,226,198,0.02)', label: 'Inbound' },
+    { key: 'networkTxRateBps', color: '#f6c760', gradientId: 'txGradient', fillFrom: 'rgba(246,199,96,0.26)', fillTo: 'rgba(246,199,96,0.02)', label: 'Outbound' },
   ], { yMin: 0, yMax: networkMax, formatter: formatRate });
-
-  renderGauge(latest?.disk?.usagePercent, latest?.disk?.used, latest?.disk?.total);
 }
 
 function renderNodeInfo(node) {
   const el = $('node-info');
-  if (!el) return;
   const rows = [
-    ['Hostname', node?.hostname || '--'],
     ['Platform', node?.platform || '--'],
     ['Architecture', node?.arch || '--'],
     ['CPU model', node?.cpuModel || '--'],
     ['Cores', node?.cores ?? '--'],
-    ['Uptime', formatDuration(node?.uptimeSec)],
   ];
-  el.innerHTML = rows.map(([label, value]) => `<div class="info-row"><span>${label}</span><strong>${value}</strong></div>`).join('');
+  el.innerHTML = rows.map(([label, value]) => `<div class="info-row"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join('');
+}
+
+function renderTcpPorts(byPort) {
+  const el = $('tcp-ports');
+  const topFive = byPort.slice(0, 5);
+  el.innerHTML = topFive.length
+    ? topFive.map((item) => `<div class="port-pill">:${item.port} <strong>${item.count}</strong></div>`).join('')
+    : '<div class="muted">No established TCP connections</div>';
 }
 
 function renderAlerts(alerts) {
   const el = $('alert-list');
-  if (!el) return;
   el.innerHTML = alerts.map((alert) => `
     <div class="alert-item ${alert.level}">
       <strong>${alert.level === 'healthy' ? 'Healthy' : 'Alert'}</strong>
-      <span>${alert.message}</span>
+      <span>${escapeHtml(alert.message)}</span>
     </div>
   `).join('');
 }
 
+function badgeClassForGateway(services) {
+  return services?.gateway?.running ? 'healthy' : 'critical';
+}
+
+function badgeClassForWeixin(services) {
+  if (services?.weixin?.state === 'OK') return 'healthy';
+  if (services?.weixin?.state === 'WARN') return 'warn';
+  return 'critical';
+}
+
 function renderServices(services) {
-  const el = $('services-list');
-  const accountsEl = $('weixin-accounts-table');
-  if (!el) return;
-  const gatewayLevel = services?.gateway?.running ? 'healthy' : 'critical';
-  const weixinLevel = services?.weixin?.state === 'OK' ? 'healthy' : (services?.weixin?.state === 'WARN' ? 'warn' : 'critical');
-  el.innerHTML = `
-    <div class="alert-item ${gatewayLevel}">
-      <strong>OpenClaw Gateway</strong>
-      <span class="status-badge ${gatewayLevel}">${services?.gateway?.label || 'Unknown'}</span>
-    </div>
-    <div class="alert-item healthy">
-      <strong>OpenClaw Sessions</strong>
-      <span>${services?.sessions ?? '--'} active</span>
-    </div>
-    <div class="alert-item ${weixinLevel}">
-      <strong>Weixin Channel</strong>
-      <span class="status-badge ${weixinLevel}">${services?.weixin?.state || 'UNKNOWN'}</span>
-    </div>
-  `;
-
-  if (accountsEl) {
-    accountsEl.innerHTML = (services?.weixin?.accounts || []).map((account) => {
-      const level = account.status === 'OK' ? 'healthy' : (account.status === 'WARN' ? 'warn' : 'critical');
-      return `
-        <tr>
-          <td>${account.account}</td>
-          <td><span class="status-badge ${level}">${account.status}</span></td>
-          <td>${account.notes}</td>
-        </tr>
-      `;
-    }).join('') || '<tr><td colspan="3">No account data</td></tr>';
-  }
-}
-
-function renderOpenClawOverview(services) {
-  const el = $('openclaw-overview');
-  if (!el) return;
-  const rows = [
-    ['Version', services?.version || '--'],
-    ['Gateway', services?.gateway?.detail || services?.gateway?.label || '--'],
-    ['Dashboard', services?.dashboard || '--'],
-    ['Tailscale', services?.tailscale || '--'],
-    ['Update', services?.update || '--'],
-    ['Sessions', services?.sessions ?? '--'],
-    ['Weixin', services?.weixin?.state || '--'],
-  ];
-  el.innerHTML = rows.map(([label, value]) => `<div class="info-row"><span>${label}</span><strong>${value}</strong></div>`).join('');
-}
-
-function renderOpenClawMetricCards(services) {
-  $('oc-sessions').textContent = services?.sessions ?? '--';
-  $('oc-heartbeat').textContent = `Version ${services?.version || '--'}`;
-  $('wx-accounts').textContent = services?.weixin?.accounts?.length ?? 0;
-  $('wx-state-meta').textContent = `State ${services?.weixin?.state || '--'}`;
-  $('gateway-status').textContent = services?.gateway?.running ? 'Online' : 'Offline';
-  $('gateway-meta').textContent = services?.version || '--';
+  const gatewayClass = badgeClassForGateway(services);
+  const weixinClass = badgeClassForWeixin(services);
+  const gatewayBadge = $('gateway-badge');
+  const weixinBadge = $('weixin-badge');
+  gatewayBadge.className = `status-badge ${gatewayClass}`;
+  gatewayBadge.textContent = services?.gateway?.running ? 'Running' : 'Offline';
+  weixinBadge.className = `status-badge ${weixinClass}`;
+  weixinBadge.textContent = services?.weixin?.state || 'UNKNOWN';
+  setText('gateway-detail', services?.gateway?.detail || services?.gateway?.label || '--');
+  setText('weixin-detail', services?.weixin?.detail || '--');
+  setText('gateway-service-name', services?.gatewayService || '--');
+  setText('gateway-sessions', String(services?.sessions ?? '--'));
+  setText('gateway-version', services?.version || '--');
 }
 
 function renderProcesses(processes) {
   const el = $('process-table');
-  if (!el) return;
   el.innerHTML = processes.map((proc) => `
     <tr>
-      <td>${proc.pid}</td>
-      <td>${proc.command}</td>
+      <td>${escapeHtml(proc.pid)}</td>
+      <td>${escapeHtml(proc.command)}</td>
       <td>${fmtPct(proc.cpuPercent)}</td>
       <td>${fmtPct(proc.memoryPercent)}</td>
     </tr>
@@ -192,10 +202,9 @@ function renderProcesses(processes) {
 
 function renderMounts(mounts) {
   const el = $('mounts-table');
-  if (!el) return;
   el.innerHTML = mounts.map((mount) => `
     <tr>
-      <td>${mount.mount}</td>
+      <td>${escapeHtml(mount.mount)}</td>
       <td>${formatBytes(mount.used)}</td>
       <td>${formatBytes(mount.total)}</td>
       <td>${fmtPct(mount.usagePercent)}</td>
@@ -205,9 +214,8 @@ function renderMounts(mounts) {
 
 function renderGauge(value = 0, used, total) {
   const pct = Math.max(0, Math.min(100, value || 0));
-  const gauge = $('disk-gauge');
-  gauge.innerHTML = `
-    <div class="gauge-ring" style="background: conic-gradient(#ff7a8a 0 ${pct}%, rgba(255,255,255,.08) ${pct}% 100%);">
+  $('disk-gauge').innerHTML = `
+    <div class="gauge-ring" style="background: conic-gradient(#fb7185 0 ${pct}%, rgba(255,255,255,.08) ${pct}% 100%);">
       <div class="gauge-content">
         <div class="gauge-value">${fmtPct(pct)}</div>
         <div class="gauge-meta">${formatBytes(used)} used of ${formatBytes(total)}</div>
@@ -216,37 +224,49 @@ function renderGauge(value = 0, used, total) {
   `;
 }
 
+function downsampleSeries(series) {
+  const BUCKET_MS = 5 * 60 * 1000;
+  if (!series.length) return [];
+  const downsampled = [];
+  let bucketStart = series[0].timestamp;
+  let bucket = [];
+  for (const point of series) {
+    if (point.timestamp - bucketStart >= BUCKET_MS && bucket.length) {
+      downsampled.push(bucket[bucket.length - 1]);
+      bucket = [];
+      bucketStart = point.timestamp;
+    }
+    bucket.push(point);
+  }
+  if (bucket.length) downsampled.push(bucket[bucket.length - 1]);
+  return downsampled;
+}
+
+function toSplinePath(points) {
+  if (!points.length) return '';
+  if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
+  let d = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const p0 = points[i - 1] || points[i];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[i + 2] || p2;
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+  }
+  return d;
+}
+
 function renderLineChart(id, series, defs, options) {
   const svg = $(id);
   const container = svg.parentElement;
-  const containerWidth = container.clientWidth || 800;
-  const height = svg.clientHeight || 260;
-  const pad = { top: 12, right: 14, bottom: 26, left: 14 };
-
-  // Downsample to ~5 minute buckets for readability
-  const BUCKET_MS = 5 * 60 * 1000;
-  const downsampled = [];
-  if (series.length) {
-    let bucketStart = series[0].timestamp;
-    let bucket = [];
-    for (const point of series) {
-      if (point.timestamp - bucketStart >= BUCKET_MS && bucket.length) {
-        downsampled.push(bucket[bucket.length - 1]); // take last point in bucket
-        bucket = [];
-        bucketStart = point.timestamp;
-      }
-      bucket.push(point);
-    }
-    if (bucket.length) downsampled.push(bucket[bucket.length - 1]);
-  }
-  const plotSeries = downsampled.length ? downsampled : series;
-
-  // Fixed width: fit container, no horizontal scroll
-  const width = containerWidth;
-  svg.setAttribute('width', width);
-  svg.setAttribute('height', height);
-  svg.style.minWidth = '';
-
+  const width = container.clientWidth || 800;
+  const height = svg.clientHeight || container.clientHeight || 260;
+  const pad = { top: 14, right: 14, bottom: 28, left: 14 };
+  const plotSeries = downsampleSeries(series);
   const innerW = width - pad.left - pad.right;
   const innerH = height - pad.top - pad.bottom;
   const minTs = plotSeries[0]?.timestamp || Date.now();
@@ -254,11 +274,13 @@ function renderLineChart(id, series, defs, options) {
   const yMin = options.yMin ?? 0;
   const yMax = options.yMax ?? 100;
 
+  svg.setAttribute('width', width);
+  svg.setAttribute('height', height);
+
   const x = (ts) => pad.left + ((ts - minTs) / Math.max(1, maxTs - minTs)) * innerW;
   const y = (v) => pad.top + innerH - ((v - yMin) / Math.max(1, yMax - yMin)) * innerH;
 
-  // Grid lines span full scrollable width
-  const grid = [0, .25, .5, .75, 1].map((p) => {
+  const grid = [0, 0.25, 0.5, 0.75, 1].map((p) => {
     const yy = pad.top + innerH * p;
     const val = yMax - (yMax - yMin) * p;
     const label = options.ySuffix ? `${val.toFixed(0)}${options.ySuffix}` : (options.formatter ? options.formatter(val) : val.toFixed(0));
@@ -268,28 +290,33 @@ function renderLineChart(id, series, defs, options) {
     `;
   }).join('');
 
-  // Time labels: show more labels for wider charts
-  const labelCount = Math.max(3, Math.min(12, Math.floor(width / 120)));
+  const labelCount = Math.max(3, Math.min(10, Math.floor(width / 120)));
   const timeLabels = Array.from({ length: labelCount }, (_, i) => {
-    const p = i / (labelCount - 1);
+    const p = labelCount === 1 ? 0 : i / (labelCount - 1);
     const ts = minTs + (maxTs - minTs) * p;
     return `<text class="chart-label" x="${pad.left + innerW * p}" y="${height - 6}" text-anchor="middle">${new Date(ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</text>`;
   }).join('');
 
-  const lines = defs.map((def) => {
-    const points = plotSeries.filter((point) => Number.isFinite(point[def.key]));
+  const gradients = defs.map((def) => `
+    <linearGradient id="${def.gradientId}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="${def.fillFrom}" />
+      <stop offset="100%" stop-color="${def.fillTo}" />
+    </linearGradient>
+  `).join('');
+
+  const lineMarkup = defs.map((def) => {
+    const points = plotSeries.filter((point) => Number.isFinite(point[def.key])).map((point) => ({ x: x(point.timestamp), y: y(point[def.key]), source: point }));
     if (!points.length) return '';
-    const d = points.map((point, i) => `${i ? 'L' : 'M'} ${x(point.timestamp)} ${y(point[def.key])}`).join(' ');
-    const area = `${d} L ${x(points.at(-1).timestamp)} ${pad.top + innerH} L ${x(points[0].timestamp)} ${pad.top + innerH} Z`;
+    const pathD = toSplinePath(points);
+    const areaD = `${pathD} L ${points.at(-1).x} ${pad.top + innerH} L ${points[0].x} ${pad.top + innerH} Z`;
     return `
-      <path class="chart-area" d="${area}" fill="${def.fill}" />
-      <path class="chart-path" d="${d}" stroke="${def.color}" />
+      <path class="chart-area" d="${areaD}" fill="url(#${def.gradientId})" />
+      <path class="chart-path" d="${pathD}" stroke="${def.color}" />
     `;
   }).join('');
 
-  svg.innerHTML = `${grid}${lines}${timeLabels}`;
+  svg.innerHTML = `<defs>${gradients}</defs>${grid}${lineMarkup}${timeLabels}`;
 
-  // Interactive tooltip (mouse + touch)
   const overlayRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
   overlayRect.setAttribute('x', pad.left);
   overlayRect.setAttribute('y', pad.top);
@@ -308,24 +335,23 @@ function renderLineChart(id, series, defs, options) {
   cursorLine.style.display = 'none';
   svg.appendChild(cursorLine);
 
-  // Data point dots
   const dots = defs.map((def) => {
     const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     dot.setAttribute('r', '4');
     dot.setAttribute('fill', def.color);
-    dot.setAttribute('stroke', 'var(--background)');
+    dot.setAttribute('stroke', 'rgba(11,16,32,1)');
     dot.setAttribute('stroke-width', '2');
     dot.style.display = 'none';
     svg.appendChild(dot);
     return dot;
   });
 
-  let tooltip = svg.parentElement.querySelector('.chart-tooltip');
+  let tooltip = container.querySelector('.chart-tooltip');
   if (!tooltip) {
     tooltip = document.createElement('div');
     tooltip.className = 'chart-tooltip';
-    svg.parentElement.style.position = 'relative';
-    svg.parentElement.appendChild(tooltip);
+    container.style.position = 'relative';
+    container.appendChild(tooltip);
   }
 
   function findClosestPoint(clientX) {
@@ -337,8 +363,8 @@ function renderLineChart(id, series, defs, options) {
     for (const point of plotSeries) {
       const dist = Math.abs(point.timestamp - ts);
       if (dist < closestDist) {
-        closestDist = dist;
         closest = point;
+        closestDist = dist;
       }
     }
     return closest;
@@ -351,30 +377,25 @@ function renderLineChart(id, series, defs, options) {
     cursorLine.setAttribute('x1', cx);
     cursorLine.setAttribute('x2', cx);
     cursorLine.style.display = '';
-
-    defs.forEach((def, i) => {
+    defs.forEach((def, index) => {
       const v = point[def.key];
       if (Number.isFinite(v)) {
-        dots[i].setAttribute('cx', cx);
-        dots[i].setAttribute('cy', y(v));
-        dots[i].style.display = '';
+        dots[index].setAttribute('cx', cx);
+        dots[index].setAttribute('cy', y(v));
+        dots[index].style.display = '';
       } else {
-        dots[i].style.display = 'none';
+        dots[index].style.display = 'none';
       }
     });
-
     const time = new Date(point.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
     const vals = defs.map((def) => {
       const v = point[def.key];
       const formatted = options.formatter ? options.formatter(v) : (options.ySuffix ? `${(v ?? 0).toFixed(1)}${options.ySuffix}` : (v ?? 0).toFixed(1));
-      return `<span style="color:${def.color}">${def.key.replace(/Percent|Bps/g, '').replace(/([A-Z])/g, ' $1').trim()}: ${formatted}</span>`;
+      return `<span style="color:${def.color}">${def.label}: ${formatted}</span>`;
     }).join('<br>');
-
     tooltip.innerHTML = `<div class="tooltip-time">${time}</div>${vals}`;
     tooltip.style.display = 'block';
-
-    const tooltipX = cx + pad.left > innerW * 0.7 ? cx - 160 : cx + 12;
-    tooltip.style.left = `${tooltipX}px`;
+    tooltip.style.left = `${cx > innerW * 0.7 ? cx - 150 : cx + 12}px`;
     tooltip.style.top = `${pad.top + 8}px`;
   }
 
@@ -384,11 +405,8 @@ function renderLineChart(id, series, defs, options) {
     dots.forEach((dot) => { dot.style.display = 'none'; });
   }
 
-  // Mouse events
   overlayRect.addEventListener('mousemove', (e) => showTooltip(e.clientX));
   overlayRect.addEventListener('mouseleave', hideTooltip);
-
-  // Touch events
   let touching = false;
   overlayRect.addEventListener('touchstart', (e) => {
     touching = true;
@@ -402,12 +420,97 @@ function renderLineChart(id, series, defs, options) {
   }, { passive: false });
   overlayRect.addEventListener('touchend', () => {
     touching = false;
-    setTimeout(hideTooltip, 1500);
+    setTimeout(hideTooltip, 1200);
   });
   overlayRect.addEventListener('touchcancel', () => {
     touching = false;
     hideTooltip();
   });
+}
+
+function openModal(title, content) {
+  $('modal-title').textContent = title;
+  $('log-output').textContent = content;
+  $('log-modal').classList.remove('hidden');
+}
+
+function closeModal() {
+  $('log-modal').classList.add('hidden');
+}
+
+async function runAction(action, button) {
+  button.disabled = true;
+  const original = button.dataset.originalText || button.textContent;
+  button.dataset.originalText = original;
+  button.textContent = 'Working…';
+  try {
+    const res = await fetch(`/api/actions/${action}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirm: true }),
+    });
+    const data = await res.json();
+    if (action.endsWith('logs')) {
+      openModal(action.includes('weixin') ? 'Weixin logs' : 'OpenClaw Gateway logs', data.output || 'No log output');
+    } else if (!data.ok) {
+      openModal('Action failed', data.output || 'Unknown error');
+    }
+    await loadData();
+  } catch (err) {
+    openModal('Action failed', String(err));
+  } finally {
+    state.pendingConfirmAction = null;
+    document.querySelectorAll('.action-btn').forEach((btn) => {
+      btn.disabled = false;
+      btn.textContent = btn.dataset.originalText || (btn.classList.contains('secondary') ? 'View Logs' : 'Restart');
+    });
+  }
+}
+
+function bindActionButtons() {
+  document.querySelectorAll('.action-btn').forEach((button) => {
+    if (button.dataset.bound === 'true') return;
+    button.dataset.bound = 'true';
+    button.dataset.originalText = button.textContent;
+    button.addEventListener('click', async () => {
+      const action = button.dataset.action;
+      const needsConfirm = action.endsWith('restart');
+      if (!needsConfirm) return runAction(action, button);
+      if (state.pendingConfirmAction !== action) {
+        state.pendingConfirmAction = action;
+        document.querySelectorAll('.action-btn').forEach((btn) => {
+          if (btn !== button && btn.dataset.action?.endsWith('restart')) {
+            btn.textContent = btn.dataset.originalText || 'Restart';
+          }
+        });
+        button.textContent = 'Are you sure?';
+        setTimeout(() => {
+          if (state.pendingConfirmAction === action && !button.disabled) {
+            state.pendingConfirmAction = null;
+            button.textContent = button.dataset.originalText || 'Restart';
+          }
+        }, 3500);
+        return;
+      }
+      return runAction(action, button);
+    });
+  });
+}
+
+function connectStream() {
+  if (state.eventSource) state.eventSource.close();
+  const es = new EventSource('/api/stream');
+  state.eventSource = es;
+  es.onopen = () => updateStreamStatus('Live stream connected', true);
+  es.onmessage = async () => {
+    updateStreamStatus('Live stream connected', true);
+    try {
+      await loadData();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+  es.onerror = () => updateStreamStatus('Stream reconnecting…', false);
 }
 
 document.querySelectorAll('#range-picker button').forEach((btn) => {
@@ -419,13 +522,20 @@ document.querySelectorAll('#range-picker button').forEach((btn) => {
 });
 
 $('refresh-btn').addEventListener('click', loadData);
+$('modal-close').addEventListener('click', closeModal);
+$('log-modal').addEventListener('click', (event) => {
+  if (event.target.dataset.close === 'modal') closeModal();
+});
 window.addEventListener('resize', () => state.payload && render());
 setActiveRange(state.rangeHours);
 
 (async function init() {
   try {
     await loadData();
+    bindActionButtons();
+    connectStream();
   } catch (err) {
     console.error(err);
+    updateStreamStatus('Initial load failed', false);
   }
 })();
