@@ -162,7 +162,6 @@ function renderOpenClawOverview(services) {
     ['Dashboard', services?.dashboard || '--'],
     ['Tailscale', services?.tailscale || '--'],
     ['Update', services?.update || '--'],
-    ['Heartbeat', services?.heartbeat || '--'],
     ['Sessions', services?.sessions ?? '--'],
     ['Weixin', services?.weixin?.state || '--'],
   ];
@@ -171,7 +170,7 @@ function renderOpenClawOverview(services) {
 
 function renderOpenClawMetricCards(services) {
   $('oc-sessions').textContent = services?.sessions ?? '--';
-  $('oc-heartbeat').textContent = `Heartbeat ${services?.heartbeat || '--'}`;
+  $('oc-heartbeat').textContent = `Version ${services?.version || '--'}`;
   $('wx-accounts').textContent = services?.weixin?.accounts?.length ?? 0;
   $('wx-state-meta').textContent = `State ${services?.weixin?.state || '--'}`;
   $('gateway-status').textContent = services?.gateway?.running ? 'Online' : 'Offline';
