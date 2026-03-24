@@ -389,7 +389,7 @@ button, input { font: inherit; }
   gap: 16px;
 }
 
-.panel.wide { min-height: 340px; }
+.panel.wide { min-height: 340px; overflow: hidden; }
 .panel-highlight { background: linear-gradient(180deg, rgba(19,26,46,.9), rgba(17,24,39,.82)); }
 
 .panel-header {
