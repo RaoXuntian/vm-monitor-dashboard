@@ -217,13 +217,6 @@ function renderGauge(value = 0, used, total) {
   `;
 }
 
-// Chart zoom state: px per data point (adjustable via pinch)
-const chartZoom = {
-  pxPerPoint: 12,   // default: ~1 minute feel at 10s sampling
-  min: 2,           // minimum: very compressed
-  max: 60,          // maximum: very spread out
-};
-
 function renderLineChart(id, series, defs, options) {
   const svg = $(id);
   const container = svg.parentElement;
@@ -231,18 +224,34 @@ function renderLineChart(id, series, defs, options) {
   const height = svg.clientHeight || 260;
   const pad = { top: 12, right: 14, bottom: 26, left: 14 };
 
-  // Scrollable width based on zoom level
-  const dataWidth = Math.max(containerWidth, series.length * chartZoom.pxPerPoint);
-  const width = dataWidth;
+  // Downsample to ~5 minute buckets for readability
+  const BUCKET_MS = 5 * 60 * 1000;
+  const downsampled = [];
+  if (series.length) {
+    let bucketStart = series[0].timestamp;
+    let bucket = [];
+    for (const point of series) {
+      if (point.timestamp - bucketStart >= BUCKET_MS && bucket.length) {
+        downsampled.push(bucket[bucket.length - 1]); // take last point in bucket
+        bucket = [];
+        bucketStart = point.timestamp;
+      }
+      bucket.push(point);
+    }
+    if (bucket.length) downsampled.push(bucket[bucket.length - 1]);
+  }
+  const plotSeries = downsampled.length ? downsampled : series;
 
+  // Fixed width: fit container, no horizontal scroll
+  const width = containerWidth;
   svg.setAttribute('width', width);
   svg.setAttribute('height', height);
-  svg.style.minWidth = `${width}px`;
+  svg.style.minWidth = '';
 
   const innerW = width - pad.left - pad.right;
   const innerH = height - pad.top - pad.bottom;
-  const minTs = series[0]?.timestamp || Date.now();
-  const maxTs = series.at(-1)?.timestamp || minTs + 1;
+  const minTs = plotSeries[0]?.timestamp || Date.now();
+  const maxTs = plotSeries.at(-1)?.timestamp || minTs + 1;
   const yMin = options.yMin ?? 0;
   const yMax = options.yMax ?? 100;
 
@@ -269,7 +278,7 @@ function renderLineChart(id, series, defs, options) {
   }).join('');
 
   const lines = defs.map((def) => {
-    const points = series.filter((point) => Number.isFinite(point[def.key]));
+    const points = plotSeries.filter((point) => Number.isFinite(point[def.key]));
     if (!points.length) return '';
     const d = points.map((point, i) => `${i ? 'L' : 'M'} ${x(point.timestamp)} ${y(point[def.key])}`).join(' ');
     const area = `${d} L ${x(points.at(-1).timestamp)} ${pad.top + innerH} L ${x(points[0].timestamp)} ${pad.top + innerH} Z`;
@@ -326,7 +335,7 @@ function renderLineChart(id, series, defs, options) {
     const ts = minTs + ((mouseX - pad.left) / Math.max(1, innerW)) * (maxTs - minTs);
     let closest = null;
     let closestDist = Infinity;
-    for (const point of series) {
+    for (const point of plotSeries) {
       const dist = Math.abs(point.timestamp - ts);
       if (dist < closestDist) {
         closestDist = dist;
@@ -400,56 +409,6 @@ function renderLineChart(id, series, defs, options) {
     touching = false;
     hideTooltip();
   });
-
-  // Auto-scroll to latest data (rightmost)
-  requestAnimationFrame(() => {
-    container.scrollLeft = container.scrollWidth;
-  });
-
-  // Pinch-to-zoom on touch + Ctrl+wheel on desktop
-  let pinchStartDist = 0;
-  let pinchStartZoom = chartZoom.pxPerPoint;
-
-  container.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 2) {
-      e.preventDefault();
-      pinchStartDist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-      pinchStartZoom = chartZoom.pxPerPoint;
-    }
-  }, { passive: false });
-
-  container.addEventListener('touchmove', (e) => {
-    if (e.touches.length === 2) {
-      e.preventDefault();
-      const dist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-      const scale = dist / Math.max(1, pinchStartDist);
-      const scrollRatio = container.scrollWidth > 0 ? container.scrollLeft / container.scrollWidth : 1;
-      chartZoom.pxPerPoint = Math.max(chartZoom.min, Math.min(chartZoom.max, pinchStartZoom * scale));
-      if (state.payload) render();
-      requestAnimationFrame(() => {
-        container.scrollLeft = scrollRatio * container.scrollWidth;
-      });
-    }
-  }, { passive: false });
-
-  container.addEventListener('wheel', (e) => {
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      const scrollRatio = container.scrollWidth > 0 ? container.scrollLeft / container.scrollWidth : 1;
-      const delta = e.deltaY > 0 ? 0.85 : 1.18;
-      chartZoom.pxPerPoint = Math.max(chartZoom.min, Math.min(chartZoom.max, chartZoom.pxPerPoint * delta));
-      if (state.payload) render();
-      requestAnimationFrame(() => {
-        container.scrollLeft = scrollRatio * container.scrollWidth;
-      });
-    }
-  }, { passive: false });
 }
 
 document.querySelectorAll('#range-picker button').forEach((btn) => {
