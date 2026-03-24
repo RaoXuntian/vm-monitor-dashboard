@@ -7,34 +7,110 @@
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <div class="shell">
-    <aside class="sidebar">
-      <div class="brand">
+  <div class="login-shell" id="login-shell">
+    <section class="login-panel">
+      <div class="login-brand">
         <div class="brand-badge">VM</div>
         <div>
           <div class="brand-title">CloudOps Monitor</div>
-          <div class="brand-subtitle">Local node telemetry</div>
+          <div class="brand-subtitle">Secure infrastructure observability</div>
         </div>
       </div>
-      <nav class="nav">
-        <a class="nav-item active" href="#">Overview</a>
-        <a class="nav-item" href="#cards">Resources</a>
-        <a class="nav-item" href="#charts">Charts</a>
-      </nav>
-      <div class="sidebar-footer">
-        <div class="muted">Retention</div>
-        <div>7 days rolling</div>
+
+      <div class="login-copy">
+        <div class="eyebrow">Welcome back</div>
+        <h1>Monitor your VM like a polished product.</h1>
+        <p class="subtle">A cleaner login experience inspired by modern SaaS dashboards. This local monitor keeps your telemetry simple, readable, and private.</p>
+        <div class="hero-bullets">
+          <span>Realtime infrastructure stats</span>
+          <span>Local-only data collection</span>
+          <span>Lightweight password protection</span>
+        </div>
+      </div>
+
+      <div class="login-form-card">
+        <div class="login-form-header">
+          <h2>Sign in to dashboard</h2>
+          <p>Demo UI for the monitor shell. Local-only visual gate for now.</p>
+        </div>
+        <form id="login-form" class="login-form">
+          <label>
+            <span>Workspace email</span>
+            <input type="email" id="email" placeholder="ops@example.com" required />
+          </label>
+          <label>
+            <span>Password</span>
+            <input type="password" id="password" placeholder="Enter monitor password" required />
+          </label>
+          <button type="submit" class="primary-btn" id="login-submit-btn">Enter monitor</button>
+        </form>
+        <div class="login-error hidden" id="login-error"></div>
+        <div class="login-note">This monitor now uses a lightweight local password gate backed by the Node server.</div>
+      </div>
+    </section>
+
+    <section class="login-visual">
+      <div class="visual-card glow-card">
+        <div class="visual-chip">Live telemetry</div>
+        <h3>Operations view, but less ugly.</h3>
+        <p>Brings a cleaner product-style layout into the existing VM monitor without rewriting the backend.</p>
+        <div class="mini-stats">
+          <div>
+            <strong>CPU</strong>
+            <span>Realtime utilization</span>
+          </div>
+          <div>
+            <strong>Memory</strong>
+            <span>Usage and capacity</span>
+          </div>
+          <div>
+            <strong>Network</strong>
+            <span>RX / TX throughput</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="app-shell hidden" id="app-shell">
+    <aside class="sidebar">
+      <div>
+        <div class="brand">
+          <div class="brand-badge">VM</div>
+          <div>
+            <div class="brand-title">CloudOps Monitor</div>
+            <div class="brand-subtitle">Local node telemetry</div>
+          </div>
+        </div>
+
+        <nav class="nav">
+          <a class="nav-item active" href="#">Overview</a>
+          <a class="nav-item" href="#cards">Resources</a>
+          <a class="nav-item" href="#charts">Charts</a>
+        </nav>
+      </div>
+
+      <div class="sidebar-footer stack">
+        <div>
+          <div class="muted tiny">Retention</div>
+          <div>7 days rolling</div>
+        </div>
+        <button class="ghost full" id="logout-btn">Log out</button>
       </div>
     </aside>
 
-    <main class="main">
-      <header class="hero">
+    <main class="workspace">
+      <header class="topbar card">
         <div>
           <div class="eyebrow">Infrastructure Overview</div>
           <h1>VM performance dashboard</h1>
           <p class="subtle">CPU, uptime, memory, network, and disk metrics collected locally from this Linux VM.</p>
         </div>
-        <div class="toolbar">
+        <div class="topbar-actions">
+          <div class="user-chip">
+            <span class="user-chip-dot"></span>
+            Local operator session
+          </div>
           <div class="range-picker" id="range-picker">
             <button data-hours="1">1h</button>
             <button data-hours="6">6h</button>
@@ -50,6 +126,69 @@
         <div class="status-pill"><span class="dot"></span> Collector active</div>
         <div class="status-pill" id="hostname-pill">Hostname: --</div>
         <div class="status-pill" id="updated-pill">Updated: --</div>
+      </section>
+
+      <section class="opclaw-metrics-grid">
+        <article class="card metric-card accent-uptime">
+          <div class="card-label">OpenClaw sessions</div>
+          <div class="metric-value" id="oc-sessions">--</div>
+          <div class="metric-meta" id="oc-heartbeat">Heartbeat --</div>
+        </article>
+        <article class="card metric-card accent-network">
+          <div class="card-label">Weixin accounts</div>
+          <div class="metric-value" id="wx-accounts">--</div>
+          <div class="metric-meta" id="wx-state-meta">State --</div>
+        </article>
+        <article class="card metric-card accent-cpu">
+          <div class="card-label">Gateway status</div>
+          <div class="metric-value" id="gateway-status">--</div>
+          <div class="metric-meta" id="gateway-meta">--</div>
+        </article>
+      </section>
+
+      <section class="ops-grid">
+        <article class="card info-panel">
+          <div class="panel-header compact">
+            <div>
+              <h2>Node information</h2>
+              <p>Machine identity and runtime basics.</p>
+            </div>
+          </div>
+          <div class="info-list" id="node-info"></div>
+        </article>
+
+        <article class="card info-panel">
+          <div class="panel-header compact">
+            <div>
+              <h2>Active alerts</h2>
+              <p>Quick capacity warning summary.</p>
+            </div>
+          </div>
+          <div class="alert-list" id="alert-list"></div>
+        </article>
+
+        <article class="card info-panel">
+          <div class="panel-header compact">
+            <div>
+              <h2>OpenClaw services</h2>
+              <p>Gateway, sessions, and channel health.</p>
+            </div>
+          </div>
+          <div class="alert-list" id="services-list"></div>
+          <div class="subpanel-title">Weixin accounts</div>
+          <div class="table-shell compact-table">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Account</th>
+                  <th>Status</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody id="weixin-accounts-table"></tbody>
+            </table>
+          </div>
+        </article>
       </section>
 
       <section class="cards" id="cards">
@@ -95,7 +234,7 @@
           <div class="chart-wrap"><svg id="chart-utilization"></svg></div>
         </article>
 
-        <article class="card panel">
+        <article class="card panel panel-highlight">
           <div class="panel-header">
             <div>
               <h2>Disk capacity</h2>
@@ -117,6 +256,64 @@
             </div>
           </div>
           <div class="chart-wrap"><svg id="chart-network"></svg></div>
+        </article>
+      </section>
+
+      <section class="control-grid">
+        <article class="card panel openclaw-panel">
+          <div class="panel-header compact">
+            <div>
+              <h2>OpenClaw control plane</h2>
+              <p>Gateway, dashboard, tailscale, and runtime summary.</p>
+            </div>
+          </div>
+          <div class="info-list" id="openclaw-overview"></div>
+        </article>
+      </section>
+
+      <section class="lower-grid">
+        <article class="card panel">
+          <div class="panel-header compact">
+            <div>
+              <h2>Top processes</h2>
+              <p>Current processes sorted by CPU usage.</p>
+            </div>
+          </div>
+          <div class="table-shell">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>PID</th>
+                  <th>Process</th>
+                  <th>CPU</th>
+                  <th>MEM</th>
+                </tr>
+              </thead>
+              <tbody id="process-table"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="card panel">
+          <div class="panel-header compact">
+            <div>
+              <h2>Filesystem usage</h2>
+              <p>Main mounted filesystems on this node.</p>
+            </div>
+          </div>
+          <div class="table-shell">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Mount</th>
+                  <th>Used</th>
+                  <th>Total</th>
+                  <th>Usage</th>
+                </tr>
+              </thead>
+              <tbody id="mounts-table"></tbody>
+            </table>
+          </div>
         </article>
       </section>
     </main>

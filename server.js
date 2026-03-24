@@ -12,6 +12,10 @@ const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || '0.0.0.0';
 const SAMPLE_INTERVAL_MS = Number(process.env.SAMPLE_INTERVAL_MS || 10000);
 const RETENTION_DAYS = 7;
+const MONITOR_PASSWORD = process.env.MONITOR_PASSWORD || 'changeme';
+const SESSION_COOKIE = 'vm_monitor_session';
+const LOGIN_WINDOW_MS = 10 * 60 * 1000;
+const MAX_LOGIN_ATTEMPTS = 8;
 
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
@@ -19,6 +23,7 @@ const DATA_DIR = path.join(ROOT, 'data');
 
 let lastCpuSample = null;
 let latestSample = null;
+const loginAttempts = new Map();
 
 async function ensureDataDir() {
   await fsp.mkdir(DATA_DIR, { recursive: true });
@@ -97,6 +102,111 @@ async function getDiskInfo() {
   };
 }
 
+async function getTopProcesses() {
+  try {
+    const { stdout } = await execFileAsync('ps', ['-eo', 'pid,comm,%cpu,%mem', '--sort=-%cpu']);
+    const lines = stdout.trim().split('\n').slice(1, 7);
+    return lines.map((line) => {
+      const cols = line.trim().split(/\s+/);
+      return {
+        pid: cols[0],
+        command: cols[1],
+        cpuPercent: Number(cols[2]) || 0,
+        memoryPercent: Number(cols[3]) || 0,
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+async function getMounts() {
+  try {
+    const { stdout } = await execFileAsync('df', ['-kP']);
+    return stdout.trim().split('\n').slice(1).map((line) => {
+      const cols = line.trim().split(/\s+/);
+      const total = Number(cols[1]) * 1024;
+      const used = Number(cols[2]) * 1024;
+      const available = Number(cols[3]) * 1024;
+      const mount = cols[5];
+      return {
+        filesystem: cols[0],
+        mount,
+        total,
+        used,
+        available,
+        usagePercent: total ? used / total * 100 : 0,
+      };
+    }).filter((item) => item.mount && !item.mount.startsWith('/snap')).slice(0, 8);
+  } catch {
+    return [];
+  }
+}
+
+async function getOpenClawStatus() {
+  try {
+    const { stdout } = await execFileAsync('openclaw', ['status', '--all']);
+    const gatewayRunning = /Gateway service\s+.*running/i.test(stdout);
+    const sessionsMatch = stdout.match(/Agents\s+.*?(\d+) sessions/i);
+    const dashboardMatch = stdout.match(/Dashboard\s+│\s+(.*?)\s*│/i);
+    const tailscaleMatch = stdout.match(/Tailscale\s+│\s+(.*?)\s*│/i);
+    const versionMatch = stdout.match(/Version\s+│\s+(.*?)\s*│/i);
+    const gatewayMatch = stdout.match(/Gateway\s+│\s+(.*?)\s*│/i);
+    const heartbeatMatch = stdout.match(/Heartbeat\s+│\s+(.*?)\s*│/i);
+    const updateMatch = stdout.match(/Update\s+│\s+(.*?)\s*│/i);
+    const weixinMatch = stdout.match(/openclaw-weixin\s+ON\s+(OK|WARN|ERROR)\s+(.*)/i);
+    const accountRows = [...stdout.matchAll(/^│\s*([a-z0-9-]+-im-bot)\s*│\s*(OK|WARN|ERROR|UNKNOWN)\s*│\s*(.*?)\s*│$/gim)]
+      .map((match) => ({
+        account: match[1],
+        status: match[2],
+        notes: match[3],
+      }));
+    return {
+      gateway: {
+        running: gatewayRunning,
+        label: gatewayRunning ? 'Running' : 'Not running',
+        detail: gatewayMatch ? gatewayMatch[1].trim() : null,
+      },
+      dashboard: dashboardMatch ? dashboardMatch[1].trim() : null,
+      tailscale: tailscaleMatch ? tailscaleMatch[1].trim() : null,
+      version: versionMatch ? versionMatch[1].trim() : null,
+      heartbeat: heartbeatMatch ? heartbeatMatch[1].trim() : null,
+      update: updateMatch ? updateMatch[1].trim() : null,
+      sessions: sessionsMatch ? Number(sessionsMatch[1]) : null,
+      weixin: weixinMatch ? {
+        state: weixinMatch[1].toUpperCase(),
+        detail: weixinMatch[2].trim(),
+        accounts: accountRows,
+      } : {
+        state: 'UNKNOWN',
+        detail: 'Channel status unavailable',
+        accounts: [],
+      },
+    };
+  } catch {
+    return {
+      gateway: { running: false, label: 'Unknown', detail: null },
+      dashboard: null,
+      tailscale: null,
+      version: null,
+      heartbeat: null,
+      update: null,
+      sessions: null,
+      weixin: { state: 'UNKNOWN', detail: 'Channel status unavailable', accounts: [] },
+    };
+  }
+}
+
+function buildAlerts(sample) {
+  const alerts = [];
+  if (!sample) return alerts;
+  if ((sample.cpu?.usagePercent || 0) >= 85) alerts.push({ level: 'critical', message: `CPU is high at ${sample.cpu.usagePercent.toFixed(1)}%` });
+  if ((sample.memory?.usagePercent || 0) >= 90) alerts.push({ level: 'critical', message: `Memory is high at ${sample.memory.usagePercent.toFixed(1)}%` });
+  if ((sample.disk?.usagePercent || 0) >= 90) alerts.push({ level: 'critical', message: `Disk is high at ${sample.disk.usagePercent.toFixed(1)}%` });
+  if (!alerts.length) alerts.push({ level: 'healthy', message: 'No active capacity alerts detected' });
+  return alerts;
+}
+
 async function collectSample() {
   const timestamp = Date.now();
   const cpuNow = parseProcStat();
@@ -109,6 +219,10 @@ async function collectSample() {
   const cpuUsagePercent = computeCpuUsage(cpuNow, lastCpuSample);
   lastCpuSample = cpuNow;
 
+  const topProcesses = await getTopProcesses();
+  const mounts = await getMounts();
+  const openclaw = await getOpenClawStatus();
+
   const sample = {
     timestamp,
     isoTime: new Date(timestamp).toISOString(),
@@ -118,6 +232,7 @@ async function collectSample() {
       load5: loadAverage[1],
       load15: loadAverage[2],
       cores: os.cpus().length,
+      model: os.cpus()?.[0]?.model || null,
     },
     memory,
     network,
@@ -125,6 +240,10 @@ async function collectSample() {
     uptimeSec,
     hostname: os.hostname(),
     platform: `${os.type()} ${os.release()}`,
+    arch: os.arch(),
+    topProcesses,
+    mounts,
+    openclaw,
   };
 
   latestSample = sample;
@@ -237,17 +356,90 @@ function buildTimeseries(samples) {
   return series;
 }
 
-function sendJson(res, status, data) {
+function sendJson(res, status, data, extraHeaders = {}) {
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
+    ...extraHeaders,
   });
   res.end(JSON.stringify(data));
 }
 
-function sendText(res, status, text, contentType = 'text/plain; charset=utf-8') {
-  res.writeHead(status, { 'Content-Type': contentType });
+function sendText(res, status, text, contentType = 'text/plain; charset=utf-8', extraHeaders = {}) {
+  res.writeHead(status, { 'Content-Type': contentType, ...extraHeaders });
   res.end(text);
+}
+
+function parseCookies(req) {
+  const raw = req.headers.cookie || '';
+  return Object.fromEntries(
+    raw
+      .split(';')
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((part) => {
+        const idx = part.indexOf('=');
+        if (idx === -1) return [part, ''];
+        return [part.slice(0, idx), decodeURIComponent(part.slice(idx + 1))];
+      })
+  );
+}
+
+function getSessionToken(req) {
+  const cookies = parseCookies(req);
+  return cookies[SESSION_COOKIE] || null;
+}
+
+function makeSessionToken() {
+  return Buffer.from(`${Date.now()}:${MONITOR_PASSWORD}`).toString('base64url');
+}
+
+function isAuthorized(req) {
+  const token = getSessionToken(req);
+  if (!token) return false;
+  try {
+    const decoded = Buffer.from(token, 'base64url').toString('utf8');
+    return decoded.endsWith(`:${MONITOR_PASSWORD}`);
+  } catch {
+    return false;
+  }
+}
+
+function getClientIp(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.trim()) {
+    return forwarded.split(',')[0].trim();
+  }
+  return req.socket?.remoteAddress || 'unknown';
+}
+
+function getLoginBucket(req) {
+  return getClientIp(req);
+}
+
+function getRateState(key) {
+  const now = Date.now();
+  const existing = loginAttempts.get(key);
+  if (!existing || now - existing.windowStart > LOGIN_WINDOW_MS) {
+    const fresh = { count: 0, windowStart: now };
+    loginAttempts.set(key, fresh);
+    return fresh;
+  }
+  return existing;
+}
+
+function isRateLimited(req) {
+  const state = getRateState(getLoginBucket(req));
+  return state.count >= MAX_LOGIN_ATTEMPTS;
+}
+
+function recordFailedLogin(req) {
+  const state = getRateState(getLoginBucket(req));
+  state.count += 1;
+}
+
+function clearFailedLogins(req) {
+  loginAttempts.delete(getLoginBucket(req));
 }
 
 const MIME = {
@@ -260,6 +452,9 @@ const MIME = {
 };
 
 async function serveStatic(req, res, pathname) {
+  if (pathname === '/' && !isAuthorized(req)) {
+    pathname = '/index.html';
+  }
   let filePath = pathname === '/' ? '/index.html' : pathname;
   filePath = path.normalize(filePath).replace(/^\.\.(\/|\\|$)/, '');
   const absPath = path.join(PUBLIC_DIR, filePath);
@@ -277,7 +472,42 @@ async function serveStatic(req, res, pathname) {
 
 async function handleApi(req, res, pathname, searchParams) {
   if (pathname === '/api/health') {
-    return sendJson(res, 200, { ok: true, latestSampleAt: latestSample?.isoTime || null });
+    return sendJson(res, 200, { ok: true, latestSampleAt: latestSample?.isoTime || null, authEnabled: true });
+  }
+
+  if (pathname === '/api/auth/status') {
+    return sendJson(res, 200, { authenticated: isAuthorized(req) });
+  }
+
+  if (pathname === '/api/auth/login' && req.method === 'POST') {
+    if (isRateLimited(req)) {
+      return sendJson(res, 429, { ok: false, error: 'Too many login attempts. Please wait and try again.' });
+    }
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    try {
+      const parsed = JSON.parse(body || '{}');
+      if (parsed.password !== MONITOR_PASSWORD) {
+        recordFailedLogin(req);
+        return sendJson(res, 401, { ok: false, error: 'Invalid password' });
+      }
+      clearFailedLogins(req);
+      return sendJson(res, 200, { ok: true, authenticated: true }, {
+        'Set-Cookie': `${SESSION_COOKIE}=${makeSessionToken()}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000`,
+      });
+    } catch {
+      return sendJson(res, 400, { ok: false, error: 'Invalid request body' });
+    }
+  }
+
+  if (pathname === '/api/auth/logout' && req.method === 'POST') {
+    return sendJson(res, 200, { ok: true, authenticated: false }, {
+      'Set-Cookie': `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`,
+    });
+  }
+
+  if (!isAuthorized(req)) {
+    return sendJson(res, 401, { error: 'Unauthorized' });
   }
 
   if (pathname === '/api/latest') {
@@ -289,10 +519,23 @@ async function handleApi(req, res, pathname, searchParams) {
     const hours = Number(searchParams.get('hours') || '1');
     const clampedHours = Math.max(1 / 6, Math.min(24 * 7, hours));
     const samples = await readSamples(clampedHours * 60 * 60 * 1000);
+    const summary = summarize(samples);
     return sendJson(res, 200, {
       rangeHours: clampedHours,
-      summary: summarize(samples),
+      summary,
       series: buildTimeseries(samples),
+      alerts: buildAlerts(summary?.latest),
+      node: summary?.latest ? {
+        hostname: summary.latest.hostname,
+        platform: summary.latest.platform,
+        arch: summary.latest.arch,
+        cpuModel: summary.latest.cpu?.model,
+        cores: summary.latest.cpu?.cores,
+        uptimeSec: summary.latest.uptimeSec,
+      } : null,
+      topProcesses: summary?.latest?.topProcesses || [],
+      mounts: summary?.latest?.mounts || [],
+      services: summary?.latest?.openclaw || null,
     });
   }
 
