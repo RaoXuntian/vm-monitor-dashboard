@@ -7,72 +7,7 @@
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <div class="login-shell" id="login-shell">
-    <section class="login-panel">
-      <div class="login-brand">
-        <div class="brand-badge">VM</div>
-        <div>
-          <div class="brand-title">CloudOps Monitor</div>
-          <div class="brand-subtitle">Secure infrastructure observability</div>
-        </div>
-      </div>
-
-      <div class="login-copy">
-        <div class="eyebrow">Welcome back</div>
-        <h1>Monitor your VM like a polished product.</h1>
-        <p class="subtle">A cleaner login experience inspired by modern SaaS dashboards. This local monitor keeps your telemetry simple, readable, and private.</p>
-        <div class="hero-bullets">
-          <span>Realtime infrastructure stats</span>
-          <span>Local-only data collection</span>
-          <span>Lightweight password protection</span>
-        </div>
-      </div>
-
-      <div class="login-form-card">
-        <div class="login-form-header">
-          <h2>Sign in to dashboard</h2>
-          <p>Demo UI for the monitor shell. Local-only visual gate for now.</p>
-        </div>
-        <form id="login-form" class="login-form">
-          <label>
-            <span>Workspace email</span>
-            <input type="email" id="email" placeholder="ops@example.com" required />
-          </label>
-          <label>
-            <span>Password</span>
-            <input type="password" id="password" placeholder="Enter monitor password" required />
-          </label>
-          <button type="submit" class="primary-btn" id="login-submit-btn">Enter monitor</button>
-        </form>
-        <div class="login-error hidden" id="login-error"></div>
-        <div class="login-note">This monitor now uses a lightweight local password gate backed by the Node server.</div>
-      </div>
-    </section>
-
-    <section class="login-visual">
-      <div class="visual-card glow-card">
-        <div class="visual-chip">Live telemetry</div>
-        <h3>Operations view, but less ugly.</h3>
-        <p>Brings a cleaner product-style layout into the existing VM monitor without rewriting the backend.</p>
-        <div class="mini-stats">
-          <div>
-            <strong>CPU</strong>
-            <span>Realtime utilization</span>
-          </div>
-          <div>
-            <strong>Memory</strong>
-            <span>Usage and capacity</span>
-          </div>
-          <div>
-            <strong>Network</strong>
-            <span>RX / TX throughput</span>
-          </div>
-        </div>
-      </div>
-    </section>
-  </div>
-
-  <div class="app-shell hidden" id="app-shell">
+  <div class="app-shell" id="app-shell">
     <aside class="sidebar">
       <div>
         <div class="brand">
@@ -95,21 +30,20 @@
           <div class="muted tiny">Retention</div>
           <div>7 days rolling</div>
         </div>
-        <button class="ghost full" id="logout-btn">Log out</button>
       </div>
     </aside>
 
     <main class="workspace">
       <header class="topbar card">
         <div>
-          <div class="eyebrow">Infrastructure Overview</div>
-          <h1>VM performance dashboard</h1>
-          <p class="subtle">CPU, uptime, memory, network, and disk metrics collected locally from this Linux VM.</p>
+          <div class="eyebrow">Overview</div>
+          <h1>VM dashboard</h1>
+          <p class="subtle">Local CPU, memory, network, disk, and OpenClaw status.</p>
         </div>
         <div class="topbar-actions">
           <div class="user-chip">
             <span class="user-chip-dot"></span>
-            Local operator session
+            Local operator
           </div>
           <div class="range-picker" id="range-picker">
             <button data-hours="1">1h</button>
@@ -140,7 +74,7 @@
           <div class="metric-meta" id="wx-state-meta">State --</div>
         </article>
         <article class="card metric-card accent-cpu">
-          <div class="card-label">Gateway status</div>
+          <div class="card-label">Gateway</div>
           <div class="metric-value" id="gateway-status">--</div>
           <div class="metric-meta" id="gateway-meta">--</div>
         </article>
@@ -150,8 +84,7 @@
         <article class="card info-panel">
           <div class="panel-header compact">
             <div>
-              <h2>Node information</h2>
-              <p>Machine identity and runtime basics.</p>
+              <h2>Node</h2>
             </div>
           </div>
           <div class="info-list" id="node-info"></div>
@@ -160,8 +93,7 @@
         <article class="card info-panel">
           <div class="panel-header compact">
             <div>
-              <h2>Active alerts</h2>
-              <p>Quick capacity warning summary.</p>
+              <h2>Alerts</h2>
             </div>
           </div>
           <div class="alert-list" id="alert-list"></div>
@@ -170,8 +102,7 @@
         <article class="card info-panel">
           <div class="panel-header compact">
             <div>
-              <h2>OpenClaw services</h2>
-              <p>Gateway, sessions, and channel health.</p>
+              <h2>OpenClaw</h2>
             </div>
           </div>
           <div class="alert-list" id="services-list"></div>
@@ -193,9 +124,9 @@
 
       <section class="cards" id="cards">
         <article class="card metric-card accent-cpu">
-          <div class="card-label">CPU usage</div>
+          <div class="card-label">CPU</div>
           <div class="metric-value" id="cpu-now">--</div>
-          <div class="metric-meta" id="cpu-meta">Load average --</div>
+          <div class="metric-meta" id="cpu-meta">Load --</div>
         </article>
         <article class="card metric-card accent-uptime">
           <div class="card-label">Availability</div>
@@ -203,17 +134,17 @@
           <div class="metric-meta" id="uptime-meta">Uptime --</div>
         </article>
         <article class="card metric-card accent-memory">
-          <div class="card-label">Memory usage</div>
+          <div class="card-label">Memory</div>
           <div class="metric-value" id="memory-now">--</div>
           <div class="metric-meta" id="memory-meta">-- / --</div>
         </article>
         <article class="card metric-card accent-network">
-          <div class="card-label">Network throughput</div>
+          <div class="card-label">Network</div>
           <div class="metric-value" id="network-now">--</div>
           <div class="metric-meta" id="network-meta">RX -- · TX --</div>
         </article>
         <article class="card metric-card accent-disk">
-          <div class="card-label">Disk usage</div>
+          <div class="card-label">Disk</div>
           <div class="metric-value" id="disk-now">--</div>
           <div class="metric-meta" id="disk-meta">-- / --</div>
         </article>
@@ -224,7 +155,7 @@
           <div class="panel-header">
             <div>
               <h2>CPU & Memory</h2>
-              <p>Utilization trends over the selected range.</p>
+              <p>Selected range.</p>
             </div>
             <div class="legend">
               <span><i class="legend-line cpu"></i>CPU</span>
@@ -237,8 +168,8 @@
         <article class="card panel panel-highlight">
           <div class="panel-header">
             <div>
-              <h2>Disk capacity</h2>
-              <p>Root volume usage.</p>
+              <h2>Disk</h2>
+              <p>Root volume.</p>
             </div>
           </div>
           <div class="gauge" id="disk-gauge"></div>
@@ -248,7 +179,7 @@
           <div class="panel-header">
             <div>
               <h2>Network throughput</h2>
-              <p>Inbound and outbound bytes per second.</p>
+              <p>Bytes per second.</p>
             </div>
             <div class="legend">
               <span><i class="legend-line rx"></i>Receive</span>
@@ -264,7 +195,6 @@
           <div class="panel-header compact">
             <div>
               <h2>OpenClaw control plane</h2>
-              <p>Gateway, dashboard, tailscale, and runtime summary.</p>
             </div>
           </div>
           <div class="info-list" id="openclaw-overview"></div>
@@ -276,7 +206,6 @@
           <div class="panel-header compact">
             <div>
               <h2>Top processes</h2>
-              <p>Current processes sorted by CPU usage.</p>
             </div>
           </div>
           <div class="table-shell">
@@ -297,8 +226,7 @@
         <article class="card panel">
           <div class="panel-header compact">
             <div>
-              <h2>Filesystem usage</h2>
-              <p>Main mounted filesystems on this node.</p>
+              <h2>Filesystems</h2>
             </div>
           </div>
           <div class="table-shell">

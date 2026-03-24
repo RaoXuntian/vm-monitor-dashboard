@@ -1,7 +1,6 @@
 const state = {
   rangeHours: 24,
   payload: null,
-  authed: false,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -42,28 +41,8 @@ function setActiveRange(hours) {
   });
 }
 
-function setAuthed(authed) {
-  state.authed = authed;
-  $('login-shell')?.classList.toggle('hidden', authed);
-  $('app-shell')?.classList.toggle('hidden', !authed);
-  $('login-error')?.classList.add('hidden');
-  $('login-error').textContent = '';
-}
-
-function showLoginError(message) {
-  const el = $('login-error');
-  if (!el) return;
-  el.textContent = message;
-  el.classList.remove('hidden');
-}
-
 async function loadData() {
   const res = await fetch(`/api/metrics?hours=${state.rangeHours}`);
-  if (res.status === 401) {
-    setAuthed(false);
-    showLoginError('Session expired. Please sign in again.');
-    return;
-  }
   state.payload = await res.json();
   render();
 }
@@ -77,7 +56,7 @@ function render() {
   $('updated-pill').textContent = `Updated: ${latest ? new Date(latest.timestamp).toLocaleString() : '--'}`;
 
   $('cpu-now').textContent = fmtPct(latest?.cpu?.usagePercent ?? summary?.averages?.cpuUsagePercent);
-  $('cpu-meta').textContent = `Load average ${fmtNum(latest?.cpu?.load1)} · ${latest?.cpu?.cores || '--'} cores`;
+  $('cpu-meta').textContent = `Load ${fmtNum(latest?.cpu?.load1)} · ${latest?.cpu?.cores || '--'} cores`;
 
   $('availability-now').textContent = fmtPct(summary?.availabilityPercent);
   $('uptime-meta').textContent = `Uptime ${formatDuration(latest?.uptimeSec)}`;
@@ -182,10 +161,10 @@ function renderOpenClawOverview(services) {
     ['Gateway', services?.gateway?.detail || services?.gateway?.label || '--'],
     ['Dashboard', services?.dashboard || '--'],
     ['Tailscale', services?.tailscale || '--'],
-    ['Update channel', services?.update || '--'],
+    ['Update', services?.update || '--'],
     ['Heartbeat', services?.heartbeat || '--'],
     ['Sessions', services?.sessions ?? '--'],
-    ['Weixin state', services?.weixin?.state || '--'],
+    ['Weixin', services?.weixin?.state || '--'],
   ];
   el.innerHTML = rows.map(([label, value]) => `<div class="info-row"><span>${label}</span><strong>${value}</strong></div>`).join('');
 }
@@ -290,56 +269,14 @@ document.querySelectorAll('#range-picker button').forEach((btn) => {
   });
 });
 
-$('login-form')?.addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const password = $('password')?.value || '';
-  const submitBtn = $('login-submit-btn');
-  if (submitBtn) submitBtn.disabled = true;
-  try {
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      showLoginError(data?.error || 'Login failed');
-      return;
-    }
-    setAuthed(true);
-    await loadData();
-  } catch (err) {
-    console.error(err);
-    showLoginError('Network error while logging in');
-  } finally {
-    if (submitBtn) submitBtn.disabled = false;
-  }
-});
-
-$('logout-btn')?.addEventListener('click', async () => {
-  try {
-    await fetch('/api/auth/logout', { method: 'POST' });
-  } catch (err) {
-    console.error(err);
-  }
-  setAuthed(false);
-});
-
 $('refresh-btn').addEventListener('click', loadData);
 window.addEventListener('resize', () => state.payload && render());
 setActiveRange(state.rangeHours);
 
 (async function init() {
   try {
-    const res = await fetch('/api/auth/status');
-    const data = await res.json();
-    if (data?.authenticated) {
-      setAuthed(true);
-      await loadData();
-      return;
-    }
+    await loadData();
   } catch (err) {
     console.error(err);
   }
-  setAuthed(false);
 })();

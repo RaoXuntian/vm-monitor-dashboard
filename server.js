@@ -9,13 +9,10 @@ const { promisify } = require('util');
 
 const execFileAsync = promisify(execFile);
 const PORT = Number(process.env.PORT || 3000);
-const HOST = process.env.HOST || '0.0.0.0';
+const HOST = process.env.HOST || '127.0.0.1';
 const SAMPLE_INTERVAL_MS = Number(process.env.SAMPLE_INTERVAL_MS || 10000);
+const OPENCLAW_STATUS_INTERVAL_MS = Number(process.env.OPENCLAW_STATUS_INTERVAL_MS || 5 * 60 * 1000);
 const RETENTION_DAYS = 7;
-const MONITOR_PASSWORD = process.env.MONITOR_PASSWORD || 'changeme';
-const SESSION_COOKIE = 'vm_monitor_session';
-const LOGIN_WINDOW_MS = 10 * 60 * 1000;
-const MAX_LOGIN_ATTEMPTS = 8;
 
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
@@ -23,7 +20,7 @@ const DATA_DIR = path.join(ROOT, 'data');
 
 let lastCpuSample = null;
 let latestSample = null;
-const loginAttempts = new Map();
+let latestOpenClawStatus = null;
 
 async function ensureDataDir() {
   await fsp.mkdir(DATA_DIR, { recursive: true });
@@ -197,6 +194,11 @@ async function getOpenClawStatus() {
   }
 }
 
+async function refreshOpenClawStatus() {
+  latestOpenClawStatus = await getOpenClawStatus();
+  return latestOpenClawStatus;
+}
+
 function buildAlerts(sample) {
   const alerts = [];
   if (!sample) return alerts;
@@ -221,7 +223,7 @@ async function collectSample() {
 
   const topProcesses = await getTopProcesses();
   const mounts = await getMounts();
-  const openclaw = await getOpenClawStatus();
+  const openclaw = latestOpenClawStatus || await refreshOpenClawStatus();
 
   const sample = {
     timestamp,
@@ -370,78 +372,6 @@ function sendText(res, status, text, contentType = 'text/plain; charset=utf-8', 
   res.end(text);
 }
 
-function parseCookies(req) {
-  const raw = req.headers.cookie || '';
-  return Object.fromEntries(
-    raw
-      .split(';')
-      .map((part) => part.trim())
-      .filter(Boolean)
-      .map((part) => {
-        const idx = part.indexOf('=');
-        if (idx === -1) return [part, ''];
-        return [part.slice(0, idx), decodeURIComponent(part.slice(idx + 1))];
-      })
-  );
-}
-
-function getSessionToken(req) {
-  const cookies = parseCookies(req);
-  return cookies[SESSION_COOKIE] || null;
-}
-
-function makeSessionToken() {
-  return Buffer.from(`${Date.now()}:${MONITOR_PASSWORD}`).toString('base64url');
-}
-
-function isAuthorized(req) {
-  const token = getSessionToken(req);
-  if (!token) return false;
-  try {
-    const decoded = Buffer.from(token, 'base64url').toString('utf8');
-    return decoded.endsWith(`:${MONITOR_PASSWORD}`);
-  } catch {
-    return false;
-  }
-}
-
-function getClientIp(req) {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string' && forwarded.trim()) {
-    return forwarded.split(',')[0].trim();
-  }
-  return req.socket?.remoteAddress || 'unknown';
-}
-
-function getLoginBucket(req) {
-  return getClientIp(req);
-}
-
-function getRateState(key) {
-  const now = Date.now();
-  const existing = loginAttempts.get(key);
-  if (!existing || now - existing.windowStart > LOGIN_WINDOW_MS) {
-    const fresh = { count: 0, windowStart: now };
-    loginAttempts.set(key, fresh);
-    return fresh;
-  }
-  return existing;
-}
-
-function isRateLimited(req) {
-  const state = getRateState(getLoginBucket(req));
-  return state.count >= MAX_LOGIN_ATTEMPTS;
-}
-
-function recordFailedLogin(req) {
-  const state = getRateState(getLoginBucket(req));
-  state.count += 1;
-}
-
-function clearFailedLogins(req) {
-  loginAttempts.delete(getLoginBucket(req));
-}
-
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
@@ -452,9 +382,6 @@ const MIME = {
 };
 
 async function serveStatic(req, res, pathname) {
-  if (pathname === '/' && !isAuthorized(req)) {
-    pathname = '/index.html';
-  }
   let filePath = pathname === '/' ? '/index.html' : pathname;
   filePath = path.normalize(filePath).replace(/^\.\.(\/|\\|$)/, '');
   const absPath = path.join(PUBLIC_DIR, filePath);
@@ -472,42 +399,7 @@ async function serveStatic(req, res, pathname) {
 
 async function handleApi(req, res, pathname, searchParams) {
   if (pathname === '/api/health') {
-    return sendJson(res, 200, { ok: true, latestSampleAt: latestSample?.isoTime || null, authEnabled: true });
-  }
-
-  if (pathname === '/api/auth/status') {
-    return sendJson(res, 200, { authenticated: isAuthorized(req) });
-  }
-
-  if (pathname === '/api/auth/login' && req.method === 'POST') {
-    if (isRateLimited(req)) {
-      return sendJson(res, 429, { ok: false, error: 'Too many login attempts. Please wait and try again.' });
-    }
-    let body = '';
-    for await (const chunk of req) body += chunk;
-    try {
-      const parsed = JSON.parse(body || '{}');
-      if (parsed.password !== MONITOR_PASSWORD) {
-        recordFailedLogin(req);
-        return sendJson(res, 401, { ok: false, error: 'Invalid password' });
-      }
-      clearFailedLogins(req);
-      return sendJson(res, 200, { ok: true, authenticated: true }, {
-        'Set-Cookie': `${SESSION_COOKIE}=${makeSessionToken()}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000`,
-      });
-    } catch {
-      return sendJson(res, 400, { ok: false, error: 'Invalid request body' });
-    }
-  }
-
-  if (pathname === '/api/auth/logout' && req.method === 'POST') {
-    return sendJson(res, 200, { ok: true, authenticated: false }, {
-      'Set-Cookie': `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`,
-    });
-  }
-
-  if (!isAuthorized(req)) {
-    return sendJson(res, 401, { error: 'Unauthorized' });
+    return sendJson(res, 200, { ok: true, latestSampleAt: latestSample?.isoTime || null, authEnabled: false });
   }
 
   if (pathname === '/api/latest') {
@@ -544,10 +436,16 @@ async function handleApi(req, res, pathname, searchParams) {
 
 async function bootstrap() {
   await ensureDataDir();
+  await refreshOpenClawStatus();
   await collectSample();
+
   setInterval(() => {
     collectSample().catch((err) => console.error('collector error', err));
   }, SAMPLE_INTERVAL_MS).unref();
+
+  setInterval(() => {
+    refreshOpenClawStatus().catch((err) => console.error('openclaw status error', err));
+  }, OPENCLAW_STATUS_INTERVAL_MS).unref();
 }
 
 const server = http.createServer(async (req, res) => {
