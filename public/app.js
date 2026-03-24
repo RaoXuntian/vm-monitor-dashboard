@@ -260,7 +260,7 @@ function renderLineChart(id, series, defs, options) {
 
   svg.innerHTML = `${grid}${lines}${timeLabels}`;
 
-  // Interactive hover tooltip
+  // Interactive tooltip (mouse + touch)
   const overlayRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
   overlayRect.setAttribute('x', pad.left);
   overlayRect.setAttribute('y', pad.top);
@@ -268,6 +268,7 @@ function renderLineChart(id, series, defs, options) {
   overlayRect.setAttribute('height', innerH);
   overlayRect.setAttribute('fill', 'transparent');
   overlayRect.style.cursor = 'crosshair';
+  overlayRect.style.touchAction = 'none';
   svg.appendChild(overlayRect);
 
   const cursorLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
@@ -277,6 +278,18 @@ function renderLineChart(id, series, defs, options) {
   cursorLine.setAttribute('stroke-dasharray', '4 3');
   cursorLine.style.display = 'none';
   svg.appendChild(cursorLine);
+
+  // Data point dots
+  const dots = defs.map((def) => {
+    const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    dot.setAttribute('r', '4');
+    dot.setAttribute('fill', def.color);
+    dot.setAttribute('stroke', 'var(--background)');
+    dot.setAttribute('stroke-width', '2');
+    dot.style.display = 'none';
+    svg.appendChild(dot);
+    return dot;
+  });
 
   let tooltip = svg.parentElement.querySelector('.chart-tooltip');
   if (!tooltip) {
@@ -302,13 +315,24 @@ function renderLineChart(id, series, defs, options) {
     return closest;
   }
 
-  overlayRect.addEventListener('mousemove', (e) => {
-    const point = findClosestPoint(e.clientX);
+  function showTooltip(clientX) {
+    const point = findClosestPoint(clientX);
     if (!point) return;
     const cx = x(point.timestamp);
     cursorLine.setAttribute('x1', cx);
     cursorLine.setAttribute('x2', cx);
     cursorLine.style.display = '';
+
+    defs.forEach((def, i) => {
+      const v = point[def.key];
+      if (Number.isFinite(v)) {
+        dots[i].setAttribute('cx', cx);
+        dots[i].setAttribute('cy', y(v));
+        dots[i].style.display = '';
+      } else {
+        dots[i].style.display = 'none';
+      }
+    });
 
     const time = new Date(point.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
     const vals = defs.map((def) => {
@@ -320,15 +344,40 @@ function renderLineChart(id, series, defs, options) {
     tooltip.innerHTML = `<div class="tooltip-time">${time}</div>${vals}`;
     tooltip.style.display = 'block';
 
-    const rect = svg.getBoundingClientRect();
     const tooltipX = cx + pad.left > innerW * 0.7 ? cx - 160 : cx + 12;
     tooltip.style.left = `${tooltipX}px`;
     tooltip.style.top = `${pad.top + 8}px`;
-  });
+  }
 
-  overlayRect.addEventListener('mouseleave', () => {
+  function hideTooltip() {
     cursorLine.style.display = 'none';
     tooltip.style.display = 'none';
+    dots.forEach((dot) => { dot.style.display = 'none'; });
+  }
+
+  // Mouse events
+  overlayRect.addEventListener('mousemove', (e) => showTooltip(e.clientX));
+  overlayRect.addEventListener('mouseleave', hideTooltip);
+
+  // Touch events
+  let touching = false;
+  overlayRect.addEventListener('touchstart', (e) => {
+    touching = true;
+    e.preventDefault();
+    if (e.touches[0]) showTooltip(e.touches[0].clientX);
+  }, { passive: false });
+  overlayRect.addEventListener('touchmove', (e) => {
+    if (!touching) return;
+    e.preventDefault();
+    if (e.touches[0]) showTooltip(e.touches[0].clientX);
+  }, { passive: false });
+  overlayRect.addEventListener('touchend', () => {
+    touching = false;
+    setTimeout(hideTooltip, 1500);
+  });
+  overlayRect.addEventListener('touchcancel', () => {
+    touching = false;
+    hideTooltip();
   });
 }
 
