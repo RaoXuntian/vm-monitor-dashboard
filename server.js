@@ -11,7 +11,7 @@ const execFileAsync = promisify(execFile);
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || '127.0.0.1';
 const SAMPLE_INTERVAL_MS = Number(process.env.SAMPLE_INTERVAL_MS || 10000);
-const OPENCLAW_STATUS_INTERVAL_MS = Number(process.env.OPENCLAW_STATUS_INTERVAL_MS || 5 * 60 * 1000);
+const OPENCLAW_STATUS_INTERVAL_MS = Number(process.env.OPENCLAW_STATUS_INTERVAL_MS || 20000);
 const RETENTION_DAYS = 7;
 
 const ROOT = __dirname;
@@ -140,18 +140,21 @@ async function getMounts() {
   }
 }
 
+const OPENCLAW_BIN = process.env.OPENCLAW_BIN || '/home/xtrao/.nvm/versions/node/v22.22.1/bin/openclaw';
+const OPENCLAW_EXEC_TIMEOUT_MS = 30000;
+
 async function getOpenClawStatus() {
   try {
-    const { stdout } = await execFileAsync('openclaw', ['status', '--all']);
-    const gatewayRunning = /Gateway service\s+.*running/i.test(stdout);
-    const sessionsMatch = stdout.match(/Agents\s+.*?(\d+) sessions/i);
+    const { stdout } = await execFileAsync(OPENCLAW_BIN, ['status', '--all'], { timeout: OPENCLAW_EXEC_TIMEOUT_MS });
+    const gatewayRunning = stdout.includes('running (pid') || stdout.includes('state active') || /reachable\s+\d+ms/i.test(stdout);
+    const sessionsMatch = stdout.match(/Agents\s+.*?(\d+)\s*sessions/i);
     const dashboardMatch = stdout.match(/Dashboard\s+│\s+(.*?)\s*│/i);
     const tailscaleMatch = stdout.match(/Tailscale\s+│\s+(.*?)\s*│/i);
-    const versionMatch = stdout.match(/Version\s+│\s+(.*?)\s*│/i);
+    const versionMatch = stdout.match(/app\s+(20\d{2}\.\d+\.\d+[-\w]*)/i);
     const gatewayMatch = stdout.match(/Gateway\s+│\s+(.*?)\s*│/i);
     const heartbeatMatch = stdout.match(/Heartbeat\s+│\s+(.*?)\s*│/i);
     const updateMatch = stdout.match(/Update\s+│\s+(.*?)\s*│/i);
-    const weixinMatch = stdout.match(/openclaw-weixin\s+ON\s+(OK|WARN|ERROR)\s+(.*)/i);
+    const weixinMatch = stdout.match(/openclaw-weixin\s*│\s*(ON|OFF)\s*│\s*(OK|WARN|ERROR)\s*│\s*(.*?)\s*│/i);
     const accountRows = [...stdout.matchAll(/^│\s*([a-z0-9-]+-im-bot)\s*│\s*(OK|WARN|ERROR|UNKNOWN)\s*│\s*(.*?)\s*│$/gim)]
       .map((match) => ({
         account: match[1],
@@ -171,8 +174,8 @@ async function getOpenClawStatus() {
       update: updateMatch ? updateMatch[1].trim() : null,
       sessions: sessionsMatch ? Number(sessionsMatch[1]) : null,
       weixin: weixinMatch ? {
-        state: weixinMatch[1].toUpperCase(),
-        detail: weixinMatch[2].trim(),
+        state: weixinMatch[2].toUpperCase(),
+        detail: weixinMatch[3].trim(),
         accounts: accountRows,
       } : {
         state: 'UNKNOWN',
@@ -180,7 +183,8 @@ async function getOpenClawStatus() {
         accounts: [],
       },
     };
-  } catch {
+  } catch (err) {
+    console.error('[openclaw-status] getOpenClawStatus failed:', String(err));
     return {
       gateway: { running: false, label: 'Unknown', detail: null },
       dashboard: null,
@@ -223,7 +227,7 @@ async function collectSample() {
 
   const topProcesses = await getTopProcesses();
   const mounts = await getMounts();
-  const openclaw = latestOpenClawStatus || await refreshOpenClawStatus();
+  const openclaw = latestOpenClawStatus;
 
   const sample = {
     timestamp,
