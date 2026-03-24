@@ -219,9 +219,20 @@ function renderGauge(value = 0, used, total) {
 
 function renderLineChart(id, series, defs, options) {
   const svg = $(id);
-  const width = svg.clientWidth || 800;
+  const container = svg.parentElement;
+  const containerWidth = container.clientWidth || 800;
   const height = svg.clientHeight || 260;
   const pad = { top: 12, right: 14, bottom: 26, left: 14 };
+
+  // Scrollable: minimum 4px per data point, at least container width
+  const MIN_PX_PER_POINT = 4;
+  const dataWidth = Math.max(containerWidth, series.length * MIN_PX_PER_POINT);
+  const width = dataWidth;
+
+  svg.setAttribute('width', width);
+  svg.setAttribute('height', height);
+  svg.style.minWidth = `${width}px`;
+
   const innerW = width - pad.left - pad.right;
   const innerH = height - pad.top - pad.bottom;
   const minTs = series[0]?.timestamp || Date.now();
@@ -232,6 +243,7 @@ function renderLineChart(id, series, defs, options) {
   const x = (ts) => pad.left + ((ts - minTs) / Math.max(1, maxTs - minTs)) * innerW;
   const y = (v) => pad.top + innerH - ((v - yMin) / Math.max(1, yMax - yMin)) * innerH;
 
+  // Grid lines span full scrollable width
   const grid = [0, .25, .5, .75, 1].map((p) => {
     const yy = pad.top + innerH * p;
     const val = yMax - (yMax - yMin) * p;
@@ -242,7 +254,10 @@ function renderLineChart(id, series, defs, options) {
     `;
   }).join('');
 
-  const timeLabels = [0, 0.5, 1].map((p) => {
+  // Time labels: show more labels for wider charts
+  const labelCount = Math.max(3, Math.min(12, Math.floor(width / 120)));
+  const timeLabels = Array.from({ length: labelCount }, (_, i) => {
+    const p = i / (labelCount - 1);
     const ts = minTs + (maxTs - minTs) * p;
     return `<text class="chart-label" x="${pad.left + innerW * p}" y="${height - 6}" text-anchor="middle">${new Date(ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</text>`;
   }).join('');
@@ -378,6 +393,11 @@ function renderLineChart(id, series, defs, options) {
   overlayRect.addEventListener('touchcancel', () => {
     touching = false;
     hideTooltip();
+  });
+
+  // Auto-scroll to latest data (rightmost)
+  requestAnimationFrame(() => {
+    container.scrollLeft = container.scrollWidth;
   });
 }
 
