@@ -346,10 +346,10 @@ async function updateMonthlyTraffic(network, timestamp) {
 }
 
 const MONITORED_SERVICES = [
-  { name: 'OpenClaw Gateway', unit: null, label: 'openclaw-gateway' },
-  { name: 'Caddy', unit: 'caddy', label: 'caddy' },
-  { name: 'V2ray', unit: 'v2ray', label: 'v2ray' },
-  { name: 'Xray', unit: 'xray', label: 'xray' },
+  { name: 'OpenClaw Gateway', unit: null, label: 'openclaw-gateway', userService: true },
+  { name: 'Caddy', unit: 'caddy', label: 'caddy', userService: false },
+  { name: 'V2ray', unit: 'v2ray', label: 'v2ray', userService: false },
+  { name: 'Xray', unit: 'xray', label: 'xray', userService: false },
 ];
 
 async function checkServiceHealth() {
@@ -357,7 +357,8 @@ async function checkServiceHealth() {
   for (const svc of MONITORED_SERVICES) {
     const unit = svc.unit || detectedGatewayServiceName;
     try {
-      const { stdout } = await execFileAsync(SYSTEMCTL_BIN, ['is-active', unit], { timeout: 5000 });
+      const args = svc.userService ? ['--user', 'is-active', unit] : ['is-active', unit];
+      const { stdout } = await execFileAsync(SYSTEMCTL_BIN, args, { timeout: 5000 });
       results.push({ name: svc.name, unit, active: stdout.trim() === 'active' });
     } catch (err) {
       const stdout = err.stdout || '';
