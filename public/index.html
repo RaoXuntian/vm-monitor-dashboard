@@ -1,234 +1,199 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>VM Monitor Dashboard</title>
-  <link rel="stylesheet" href="/styles.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Azure VM Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
 </head>
-<body>
-  <div class="app-shell">
-    <header class="topbar glass-card">
-      <div>
-        <div class="eyebrow">Live VM monitor</div>
-        <h1>Bento operations dashboard</h1>
-        <p class="subtle">Realtime CPU, memory, network, storage, and OpenClaw / Weixin service visibility.</p>
-      </div>
-      <div class="topbar-actions">
-        <div class="live-pill" id="stream-status">Connecting stream…</div>
-        <div class="range-picker" id="range-picker">
-          <button data-hours="1">1h</button>
-          <button data-hours="6">6h</button>
-          <button data-hours="24" class="active">24h</button>
-          <button data-hours="72">3d</button>
-          <button data-hours="168">7d</button>
-        </div>
-        <button class="ghost" id="refresh-btn">Refresh</button>
-      </div>
-    </header>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
 
-    <section class="status-strip">
-      <div class="status-pill" id="hostname-pill">Hostname: --</div>
-      <div class="status-pill" id="updated-pill">Updated: --</div>
-      <div class="status-pill" id="uptime-pill">Uptime: --</div>
-      <div class="status-pill" id="connections-pill">TCP: --</div>
+  <!-- Nav -->
+  <nav class="sticky top-0 z-10 bg-white/80 backdrop-blur border-b border-slate-200">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+      <h1 class="text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Azure VM Dashboard</h1>
+      <div id="health-pill" class="text-xs font-medium text-slate-400 bg-slate-100 px-3 py-1 rounded-full">连接中…</div>
+    </div>
+  </nav>
+
+  <main class="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+
+    <!-- Info Banner -->
+    <div class="mb-6 bg-blue-50 border border-blue-100 rounded-lg p-3 flex items-start sm:items-center text-sm text-blue-700 shadow-sm">
+      <i data-lucide="info" class="w-5 h-5 mr-2 shrink-0 text-blue-500"></i>
+      <p><strong>数据保留策略：</strong> 为保障轻量级 VM 存储健康，各项监控指标及日志数据<span class="font-semibold text-blue-800">仅追溯近 7 天</span>，超期历史数据将由系统定时清理。</p>
+    </div>
+
+    <!-- Section 1: 业务实例管控 -->
+    <section class="mb-8">
+      <h2 class="text-lg font-semibold text-slate-700 mb-4">业务实例管控</h2>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+        <!-- WeChat Agent -->
+        <a href="/weixin" class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 block group">
+          <div class="flex items-center justify-between mb-3">
+            <div class="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center text-green-600">
+              <i data-lucide="message-circle" class="w-5 h-5"></i>
+            </div>
+            <span id="weixin-status" class="text-xs font-medium text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">--</span>
+          </div>
+          <h3 class="font-semibold text-slate-800 mb-1">WeChat Agent</h3>
+          <p class="text-sm text-slate-500 leading-relaxed">管理 OpenClaw 微信机器人实例。支持状态查看、扫码获取 Token、配置注入及热重载。</p>
+        </a>
+
+        <!-- OpenClaw Gateway -->
+        <a href="/openclaw" class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 block group">
+          <div class="flex items-center justify-between mb-3">
+            <div class="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+              <i data-lucide="network" class="w-5 h-5"></i>
+            </div>
+          </div>
+          <h3 class="font-semibold text-slate-800 mb-1">OpenClaw Gateway</h3>
+          <p class="text-sm text-slate-500 leading-relaxed">查看 V2 架构网关的 In-flight 任务、排空状态，以及触发安全优雅重启 (Graceful Restart)。</p>
+        </a>
+
+        <!-- V2ray Service (TBD) -->
+        <div class="rounded-2xl p-6 border-2 border-dashed border-slate-300 bg-slate-50 opacity-60 cursor-not-allowed">
+          <div class="flex items-center justify-between mb-3">
+            <div class="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400">
+              <i data-lucide="shield" class="w-5 h-5"></i>
+            </div>
+            <span class="text-xs font-medium text-slate-400 bg-slate-200 px-2 py-0.5 rounded-full">TBD</span>
+          </div>
+          <h3 class="font-semibold text-slate-400 mb-1">V2ray Service</h3>
+          <p class="text-sm text-slate-400 leading-relaxed">代理流量监控及出海节点状态管理。功能规划中，暂未开放。</p>
+        </div>
+
+      </div>
     </section>
 
-    <main class="bento-grid">
-      <article class="glass-card bento-card large cpu-card">
-        <div class="card-head">
-          <div>
-            <div class="card-label">CPU</div>
-            <div class="metric-value" id="cpu-now">--</div>
-            <div class="metric-meta" id="cpu-meta">Load --</div>
-          </div>
-          <div class="metric-stack right">
-            <div class="mini-stat">
-              <span>Peak</span>
-              <strong id="cpu-peak">--</strong>
+    <!-- Section 2: 虚拟机实时状态 -->
+    <section>
+      <h2 class="text-lg font-semibold text-slate-700 mb-4">虚拟机实时状态</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+
+        <!-- CPU -->
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+              <i data-lucide="cpu" class="w-5 h-5"></i>
             </div>
-            <div class="mini-stat">
-              <span>Avg</span>
-              <strong id="cpu-avg">--</strong>
+            <div class="text-sm text-slate-500">CPU 使用率 (2 vCPU)</div>
+          </div>
+          <div class="text-3xl font-bold text-slate-800 mb-3" id="metric-cpu">--%</div>
+          <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+            <div id="bar-cpu" class="h-full bg-blue-500 rounded-full transition-all duration-500" style="width:0%"></div>
+          </div>
+        </div>
+
+        <!-- Memory -->
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+              <i data-lucide="memory-stick" class="w-5 h-5"></i>
             </div>
+            <div class="text-sm text-slate-500">内存使用 (8 GiB)</div>
+          </div>
+          <div class="flex items-baseline gap-1 mb-3">
+            <span class="text-3xl font-bold text-slate-800" id="metric-mem">-- GB</span>
+            <span class="text-sm text-slate-400" id="metric-mem-total">/ -- GB</span>
+          </div>
+          <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+            <div id="bar-mem" class="h-full bg-indigo-500 rounded-full transition-all duration-500" style="width:0%"></div>
           </div>
         </div>
-        <div class="legend compact">
-          <span><i class="legend-line cpu"></i>CPU usage</span>
-        </div>
-        <div class="chart-wrap tall"><svg id="chart-cpu"></svg></div>
-      </article>
 
-      <article class="glass-card bento-card large memory-card">
-        <div class="card-head">
-          <div>
-            <div class="card-label">Memory</div>
-            <div class="metric-value" id="memory-now">--</div>
-            <div class="metric-meta" id="memory-meta">-- / --</div>
-          </div>
-          <div class="metric-stack right">
-            <div class="mini-stat">
-              <span>Used</span>
-              <strong id="memory-used">--</strong>
+        <!-- Disk -->
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600">
+              <i data-lucide="hard-drive" class="w-5 h-5"></i>
             </div>
-            <div class="mini-stat">
-              <span>Total</span>
-              <strong id="memory-total">--</strong>
+            <div class="text-sm text-slate-500">磁盘空间 (/dev/sda1)</div>
+          </div>
+          <div class="flex items-baseline gap-2 mb-3">
+            <span class="text-3xl font-bold text-slate-800" id="metric-disk">--%</span>
+            <span class="text-sm text-slate-400" id="metric-disk-avail">剩余 -- GB</span>
+          </div>
+          <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+            <div id="bar-disk" class="h-full bg-purple-500 rounded-full transition-all duration-500" style="width:0%"></div>
+          </div>
+        </div>
+
+        <!-- Uptime -->
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
+              <i data-lucide="clock" class="w-5 h-5"></i>
             </div>
+            <div class="text-sm text-slate-500">系统运行时间</div>
           </div>
+          <div class="text-3xl font-bold text-slate-800 mb-3" id="metric-uptime">--</div>
+          <div class="text-xs text-slate-400" id="uptime-sub">Health check: --</div>
         </div>
-        <div class="legend compact">
-          <span><i class="legend-line memory"></i>Memory usage</span>
-        </div>
-        <div class="chart-wrap tall"><svg id="chart-memory"></svg></div>
-      </article>
 
-      <article class="glass-card bento-card medium network-card">
-        <div class="card-head">
-          <div>
-            <div class="card-label">Network throughput</div>
-            <div class="metric-value" id="network-now">--</div>
-            <div class="metric-meta" id="network-meta">RX -- · TX --</div>
-          </div>
-        </div>
-        <div class="network-summary">
-          <div class="mini-stat"><span>TCP active</span><strong id="tcp-total">--</strong></div>
-          <div class="mini-stat"><span>Monthly inbound</span><strong id="monthly-in">--</strong></div>
-          <div class="mini-stat"><span>Monthly outbound</span><strong id="monthly-out">--</strong></div>
-        </div>
-        <div class="legend compact">
-          <span><i class="legend-line rx"></i>Inbound</span>
-          <span><i class="legend-line tx"></i>Outbound</span>
-        </div>
-        <div class="chart-wrap"><svg id="chart-network"></svg></div>
-      </article>
-
-      <article class="glass-card bento-card medium disk-card">
-        <div class="card-head">
-          <div>
-            <div class="card-label">Disk usage</div>
-            <div class="metric-value" id="disk-now">--</div>
-            <div class="metric-meta" id="disk-meta">-- / --</div>
-          </div>
-        </div>
-        <div class="gauge" id="disk-gauge"></div>
-      </article>
-
-      <article class="glass-card bento-card small info-card">
-        <div class="card-label">System info</div>
-        <div class="info-list" id="node-info"></div>
-      </article>
-
-      <article class="glass-card bento-card small info-card">
-        <div class="card-label">Uptime & availability</div>
-        <div class="metric-value" id="availability-now">--</div>
-        <div class="metric-meta" id="availability-meta">Uptime --</div>
-      </article>
-
-      <article class="glass-card bento-card small info-card">
-        <div class="card-label">Hostname</div>
-        <div class="metric-value hostname-value" id="hostname-value">--</div>
-        <div class="metric-meta" id="platform-meta">--</div>
-      </article>
-
-      <article class="glass-card bento-card small info-card">
-        <div class="card-label">Active connections</div>
-        <div class="metric-value" id="tcp-card-total">--</div>
-        <div class="ports-list" id="tcp-ports"></div>
-      </article>
-
-      <article class="glass-card bento-card service-card">
-        <div class="card-head service-head">
-          <div>
-            <div class="card-label">Service status</div>
-            <div class="service-subtle">Control OpenClaw Gateway and Weixin channel</div>
-          </div>
-        </div>
-        <div class="service-grid">
-          <div class="service-row">
-            <div>
-              <div class="service-name">OpenClaw Gateway</div>
-              <div class="service-detail" id="gateway-detail">--</div>
-            </div>
-            <div class="service-actions">
-              <span class="status-badge unknown" id="gateway-badge">Unknown</span>
-              <button class="action-btn" data-action="openclaw-restart">Restart</button>
-              <button class="action-btn secondary" data-action="openclaw-logs">View Logs</button>
-            </div>
-          </div>
-          <div class="service-row">
-            <div>
-              <div class="service-name">Weixin Channel</div>
-              <div class="service-detail" id="weixin-detail">--</div>
-            </div>
-            <div class="service-actions">
-              <span class="status-badge unknown" id="weixin-badge">Unknown</span>
-              <button class="action-btn" data-action="weixin-restart">Restart</button>
-              <button class="action-btn secondary" data-action="weixin-logs">View Logs</button>
-            </div>
-          </div>
-        </div>
-        <div class="service-extra">
-          <div class="mini-stat"><span>Gateway service</span><strong id="gateway-service-name">--</strong></div>
-          <div class="mini-stat"><span>Sessions</span><strong id="gateway-sessions">--</strong></div>
-          <div class="mini-stat"><span>Version</span><strong id="gateway-version">--</strong></div>
-        </div>
-      </article>
-
-      <article class="glass-card bento-card table-card">
-        <div class="card-head compact-head">
-          <div>
-            <div class="card-label">Alerts</div>
-          </div>
-        </div>
-        <div class="alert-list" id="alert-list"></div>
-      </article>
-
-      <article class="glass-card bento-card table-card">
-        <div class="card-head compact-head">
-          <div>
-            <div class="card-label">Top processes</div>
-          </div>
-        </div>
-        <div class="table-shell">
-          <table class="data-table">
-            <thead>
-              <tr><th>PID</th><th>Process</th><th>CPU</th><th>MEM</th></tr>
-            </thead>
-            <tbody id="process-table"></tbody>
-          </table>
-        </div>
-      </article>
-
-      <article class="glass-card bento-card table-card">
-        <div class="card-head compact-head">
-          <div>
-            <div class="card-label">Filesystems</div>
-          </div>
-        </div>
-        <div class="table-shell">
-          <table class="data-table">
-            <thead>
-              <tr><th>Mount</th><th>Used</th><th>Total</th><th>Usage</th></tr>
-            </thead>
-            <tbody id="mounts-table"></tbody>
-          </table>
-        </div>
-      </article>
-    </main>
-  </div>
-
-  <div class="modal hidden" id="log-modal">
-    <div class="modal-backdrop" data-close="modal"></div>
-    <div class="modal-panel glass-card">
-      <div class="modal-head">
-        <h2 id="modal-title">Logs</h2>
-        <button class="ghost small" id="modal-close">Close</button>
       </div>
-      <pre class="log-output" id="log-output">Loading…</pre>
-    </div>
-  </div>
+    </section>
 
-  <script src="/app.js"></script>
+  </main>
+
+  <script>
+    lucide.createIcons();
+
+    const evtSource = new EventSource('/api/stream');
+    evtSource.onopen = () => {
+      const pill = document.getElementById('health-pill');
+      pill.textContent = '● 已连接';
+      pill.className = 'text-xs font-medium text-green-600 bg-green-50 px-3 py-1 rounded-full';
+    };
+    evtSource.onerror = () => {
+      const pill = document.getElementById('health-pill');
+      pill.textContent = '● 断开';
+      pill.className = 'text-xs font-medium text-red-600 bg-red-50 px-3 py-1 rounded-full';
+    };
+    evtSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+
+      // CPU
+      const cpuPct = data.cpu?.usagePercent?.toFixed(1) ?? '--';
+      document.getElementById('metric-cpu').textContent = `${cpuPct}%`;
+      document.getElementById('bar-cpu').style.width = `${cpuPct}%`;
+
+      // Memory
+      const memUsed = (data.memory?.used / (1024**3)).toFixed(1);
+      const memTotal = (data.memory?.total / (1024**3)).toFixed(1);
+      const memPct = data.memory?.usagePercent?.toFixed(0) ?? 0;
+      document.getElementById('metric-mem').textContent = `${memUsed} GB`;
+      document.getElementById('metric-mem-total').textContent = `/ ${memTotal} GB`;
+      document.getElementById('bar-mem').style.width = `${memPct}%`;
+
+      // Disk
+      const diskPct = data.disk?.usagePercent?.toFixed(0) ?? '--';
+      const diskAvail = (data.disk?.available / (1024**3)).toFixed(0);
+      document.getElementById('metric-disk').textContent = `${diskPct}%`;
+      document.getElementById('metric-disk-avail').textContent = `剩余 ${diskAvail} GB`;
+      document.getElementById('bar-disk').style.width = `${diskPct}%`;
+
+      // Uptime
+      const uptimeSec = data.uptimeSec || 0;
+      const days = Math.floor(uptimeSec / 86400);
+      const hours = Math.floor((uptimeSec % 86400) / 3600);
+      document.getElementById('metric-uptime').innerHTML = `${days}<span class="text-lg text-slate-500 font-normal">d</span> ${hours}<span class="text-lg text-slate-500 font-normal">h</span>`;
+
+      // WeChat status
+      const weixinState = data.openclaw?.weixin?.state;
+      const weixinIndicator = document.getElementById('weixin-status');
+      if (weixinIndicator) {
+        if (weixinState === 'OK') {
+          weixinIndicator.textContent = 'Online';
+          weixinIndicator.className = 'text-xs font-medium text-green-600 bg-green-50 px-2 py-0.5 rounded-full';
+        } else {
+          weixinIndicator.textContent = weixinState || 'Offline';
+          weixinIndicator.className = 'text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full';
+        }
+      }
+    };
+  </script>
 </body>
 </html>
