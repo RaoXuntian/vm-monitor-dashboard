@@ -209,8 +209,8 @@
         🔗 Generate Login QR Code
       </button>
       <div id="qr-area" class="hidden mt-4">
-        <div class="max-w-[280px] mx-auto bg-white border border-slate-200 rounded-2xl p-4 relative">
-          <canvas id="qr-canvas" class="w-full h-auto rounded-xl"></canvas>
+        <div class="max-w-[280px] mx-auto bg-white border border-slate-200 rounded-2xl p-4 relative flex items-center justify-center">
+          <canvas id="qr-canvas" class="rounded-xl" style="display:block; margin:0 auto;"></canvas>
           <!-- Overlay appears only when the QR is expired or polling failed badly. -->
           <div id="qr-overlay" class="absolute inset-0 bg-slate-900/60 rounded-2xl hidden items-center justify-center flex-col gap-3 text-white">
             <span class="text-sm" data-i18n="weixin.qr.expired">QR code expired</span>
