@@ -345,13 +345,57 @@ async function updateMonthlyTraffic(network, timestamp) {
   };
 }
 
+const MONITORED_SERVICES = [
+  { name: 'OpenClaw Gateway', unit: null, label: 'openclaw-gateway' },
+  { name: 'Caddy', unit: 'caddy', label: 'caddy' },
+  { name: 'V2ray', unit: 'v2ray', label: 'v2ray' },
+  { name: 'Xray', unit: 'xray', label: 'xray' },
+];
+
+async function checkServiceHealth() {
+  const results = [];
+  for (const svc of MONITORED_SERVICES) {
+    const unit = svc.unit || detectedGatewayServiceName;
+    try {
+      const { stdout } = await execFileAsync(SYSTEMCTL_BIN, ['is-active', unit], { timeout: 5000 });
+      results.push({ name: svc.name, unit, active: stdout.trim() === 'active' });
+    } catch (err) {
+      const stdout = err.stdout || '';
+      results.push({ name: svc.name, unit, active: false, state: stdout.trim() || 'unknown' });
+    }
+  }
+  return results;
+}
+
 function buildAlerts(sample) {
   const alerts = [];
   if (!sample) return alerts;
   if ((sample.cpu?.usagePercent || 0) >= 85) alerts.push({ level: 'critical', message: `CPU is high at ${sample.cpu.usagePercent.toFixed(1)}%` });
   if ((sample.memory?.usagePercent || 0) >= 90) alerts.push({ level: 'critical', message: `Memory is high at ${sample.memory.usagePercent.toFixed(1)}%` });
   if ((sample.disk?.usagePercent || 0) >= 90) alerts.push({ level: 'critical', message: `Disk is high at ${sample.disk.usagePercent.toFixed(1)}%` });
-  if (!alerts.length) alerts.push({ level: 'healthy', message: 'No active capacity alerts detected' });
+
+  if (Array.isArray(sample.serviceHealth)) {
+    for (const svc of sample.serviceHealth) {
+      if (!svc.active) {
+        alerts.push({ level: 'critical', message: `${svc.name} service is DOWN (${svc.unit}: ${svc.state || 'inactive'})` });
+      }
+    }
+  }
+
+  if (sample.openclaw?.gateway && !sample.openclaw.gateway.running) {
+    const alreadyCovered = alerts.some(a => a.message.includes('OpenClaw'));
+    if (!alreadyCovered) {
+      alerts.push({ level: 'critical', message: 'OpenClaw Gateway is not responding' });
+    }
+  }
+
+  if (sample.openclaw?.weixin?.state === 'ERROR') {
+    alerts.push({ level: 'critical', message: `WeChat channel error: ${sample.openclaw.weixin.detail || 'unknown'}` });
+  } else if (sample.openclaw?.weixin?.state === 'WARN') {
+    alerts.push({ level: 'warning', message: `WeChat channel warning: ${sample.openclaw.weixin.detail || 'check accounts'}` });
+  }
+
+  if (!alerts.length) alerts.push({ level: 'healthy', message: 'All systems operational — no active alerts' });
   return alerts;
 }
 
@@ -361,11 +405,12 @@ async function collectSample() {
   const memory = parseMemInfo();
   const network = parseNetDev();
   const tcpConnections = parseTcpConnections();
-  const [disk, topProcesses, mounts, monthlyTraffic] = await Promise.all([
+  const [disk, topProcesses, mounts, monthlyTraffic, serviceHealth] = await Promise.all([
     getDiskInfo(),
     getTopProcesses(),
     getMounts(),
     updateMonthlyTraffic(network, timestamp),
+    checkServiceHealth(),
   ]);
   const loadAverage = os.loadavg();
   const uptimeSec = os.uptime();
@@ -395,6 +440,7 @@ async function collectSample() {
     topProcesses,
     mounts,
     openclaw: latestOpenClawStatus,
+    serviceHealth,
   };
 
   latestSample = sample;
@@ -531,6 +577,7 @@ function buildMetricsPayload(samples, rangeHours) {
     services: summary?.latest?.openclaw || latestOpenClawStatus || null,
     monthlyTraffic: summary?.latest?.monthlyTraffic || monthlyTrafficState,
     tcpConnections: summary?.latest?.tcpConnections || { total: 0, byPort: [] },
+    serviceHealth: summary?.latest?.serviceHealth || [],
   };
 }
 
