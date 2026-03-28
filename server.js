@@ -25,6 +25,7 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const DATA_DIR = path.join(ROOT, 'data');
 const MONTHLY_TRAFFIC_PATH = path.join(DATA_DIR, MONTHLY_TRAFFIC_FILE);
+const PEER_ALIASES_PATH = path.join(DATA_DIR, 'peer-aliases.json');
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
@@ -897,6 +898,35 @@ async function handleAction(req, res, pathname) {
   });
 }
 
+async function loadPeerAliases() {
+  try {
+    return JSON.parse(await fsp.readFile(PEER_ALIASES_PATH, 'utf8'));
+  } catch { return {}; }
+}
+
+async function savePeerAliases(aliases) {
+  await fsp.writeFile(PEER_ALIASES_PATH, JSON.stringify(aliases, null, 2), 'utf8');
+}
+
+async function getWeixinPeers() {
+  const aliases = await loadPeerAliases();
+  const peers = [];
+  try {
+    const files = await fsp.readdir(WEIXIN_ACCOUNTS_DIR);
+    for (const file of files) {
+      if (!file.endsWith('.context-tokens.json')) continue;
+      const accountId = file.replace('.context-tokens.json', '');
+      try {
+        const data = JSON.parse(await fsp.readFile(path.join(WEIXIN_ACCOUNTS_DIR, file), 'utf8'));
+        for (const peerId of Object.keys(data)) {
+          peers.push({ peerId, accountId, alias: aliases[peerId] || null });
+        }
+      } catch {}
+    }
+  } catch {}
+  return peers;
+}
+
 async function handleApi(req, res, pathname, searchParams) {
   if (pathname === '/api/health') {
     return sendJson(res, 200, {
@@ -929,6 +959,26 @@ async function handleApi(req, res, pathname, searchParams) {
   if (pathname === '/api/weixin/qr/status') {
     if (req.method !== 'GET') return sendJson(res, 405, { error: 'Method not allowed' }, { Allow: 'GET' });
     return handleWeixinQrStatus(res, searchParams);
+  }
+
+  if (pathname === '/api/weixin/peers') {
+    return sendJson(res, 200, { peers: await getWeixinPeers() });
+  }
+
+  if (pathname === '/api/weixin/peers/alias') {
+    if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method not allowed' });
+    const body = await readRequestBody(req);
+    if (!body.peerId || typeof body.peerId !== 'string') {
+      return sendJson(res, 400, { error: 'peerId is required' });
+    }
+    const aliases = await loadPeerAliases();
+    if (body.alias && typeof body.alias === 'string' && body.alias.trim()) {
+      aliases[body.peerId] = body.alias.trim();
+    } else {
+      delete aliases[body.peerId];
+    }
+    await savePeerAliases(aliases);
+    return sendJson(res, 200, { ok: true, peerId: body.peerId, alias: aliases[body.peerId] || null });
   }
 
   if (pathname === '/api/metrics') {
