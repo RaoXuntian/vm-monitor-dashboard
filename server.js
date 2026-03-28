@@ -750,7 +750,7 @@ async function readWeixinAccountIds() {
   try {
     const entries = await fsp.readdir(WEIXIN_ACCOUNTS_DIR, { withFileTypes: true });
     return entries
-      .filter((entry) => entry.isFile() && entry.name.endsWith('.json') && !entry.name.endsWith('.sync.json'))
+      .filter((entry) => entry.isFile() && entry.name.endsWith('.json') && !entry.name.endsWith('.sync.json') && !entry.name.endsWith('.context-tokens.json'))
       .map((entry) => entry.name.replace(/\.json$/, ''))
       .sort();
   } catch {
@@ -778,9 +778,13 @@ async function getCombinedWeixinStatus() {
     }
   }
 
+  console.log('[DEBUG-WEIXIN] knownIds:', knownIds, 'reported:', reportedAccounts.map(a => a?.account), 'merged:', [...merged.keys()]);
+
   return {
     ...status,
-    accounts: [...merged.values()].sort((a, b) => String(a.account).localeCompare(String(b.account))),
+    accounts: [...merged.values()]
+      .filter((a) => !String(a.account).includes('.context-tokens') && !String(a.account).includes('.sync'))
+      .sort((a, b) => String(a.account).localeCompare(String(b.account))),
   };
 }
 
