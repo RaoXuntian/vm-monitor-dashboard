@@ -36,7 +36,7 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
 
 // ─── Configuration Constants ──────────────────────────────────────────────
 const PORT = Number(process.env.PORT || 3000);
-const HOST = '127.0.0.1'; // Bind to loopback only; Caddy handles public TLS
+const HOST = process.env.HOST || '127.0.0.1'; // Default loopback; override for non-proxied setups
 const SAMPLE_INTERVAL_MS = Number(process.env.SAMPLE_INTERVAL_MS || 10000); // /proc polling frequency
 const OPENCLAW_STATUS_INTERVAL_MS = Number(process.env.OPENCLAW_STATUS_INTERVAL_MS || 60000); // openclaw status --all is expensive; poll less often
 const SERVICE_CHECK_INTERVAL_MS = 30000; // systemctl is-active checks
