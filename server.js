@@ -3,6 +3,7 @@ const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
 const { URL } = require('url');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
@@ -16,15 +17,10 @@ const RETENTION_DAYS = 7;
 const SSE_INTERVAL_MS = 10000;
 const MONTHLY_TRAFFIC_FILE = 'monthly-traffic.json';
 const OPENCLAW_BIN = '/home/xtrao/.nvm/versions/node/v22.22.1/bin/openclaw';
-const OPENCLAW_EXEC_TIMEOUT_MS = 30000;
 const SYSTEMCTL_BIN = '/usr/bin/systemctl';
 const JOURNALCTL_BIN = '/usr/bin/journalctl';
 const BASH_BIN = '/bin/bash';
-const WEIXIN_QR_TTL_MS = 5 * 60 * 1000;
-const WEIXIN_POLL_TIMEOUT_MS = 30000;
-const OPENCLAW_CONFIG_PATH = path.join(os.homedir(), '.openclaw', 'openclaw.json');
 const WEIXIN_ACCOUNTS_DIR = path.join(os.homedir(), '.openclaw', 'openclaw-weixin', 'accounts');
-const GATEWAY_WS_URL = 'ws://127.0.0.1:18789';
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const DATA_DIR = path.join(ROOT, 'data');
@@ -45,8 +41,16 @@ let latestOpenClawStatus = null;
 let detectedGatewayServiceName = 'openclaw-gateway';
 let monthlyTrafficState = null;
 const sseClients = new Set();
-const weixinQrSessions = new Map();
-let gatewayAuthPassword = null;
+const qrSessions = new Map();
+const QR_SESSION_TTL_MS = 5 * 60 * 1000;
+const QR_MAX_SESSIONS = 10;
+
+const STATUS_MESSAGES = {
+  wait: 'Waiting for scan...',
+  scaned: 'Scanned! Please confirm on your phone...',
+  confirmed: '✅ WeChat account linked successfully!',
+  expired: 'QR code expired. Please generate a new one.',
+};
 
 async function ensureDataDir() {
   await fsp.mkdir(DATA_DIR, { recursive: true });
@@ -58,15 +62,6 @@ function utcDateStamp(ts = Date.now()) {
 
 function currentMonthStamp(ts = Date.now()) {
   return new Date(ts).toISOString().slice(0, 7);
-}
-
-function loadGatewayPassword() {
-  try {
-    const config = JSON.parse(fs.readFileSync(OPENCLAW_CONFIG_PATH, 'utf8'));
-    return config?.gateway?.auth?.password || config?.gateway?.auth?.token || null;
-  } catch {
-    return null;
-  }
 }
 
 function dataFileFor(ts) {
@@ -237,7 +232,7 @@ async function detectGatewayServiceName() {
 
 async function getOpenClawStatus() {
   try {
-    const { stdout } = await execFileAsync(OPENCLAW_BIN, ['status', '--all'], { timeout: OPENCLAW_EXEC_TIMEOUT_MS });
+    const { stdout } = await execFileAsync(OPENCLAW_BIN, ['status', '--all'], { timeout: 30000 });
     const gatewayRunning = stdout.includes('running (pid') || stdout.includes('state active') || /reachable\s+\d+ms/i.test(stdout);
     const sessionsMatch = stdout.match(/Agents\s+.*?(\d+)\s*sessions/i);
     const dashboardMatch = stdout.match(/Dashboard\s+│\s+(.*?)\s*│/i);
@@ -636,148 +631,126 @@ async function runCommand(file, args, options = {}) {
   }
 }
 
-function closeGatewaySession(sessionKey) {
-  const session = weixinQrSessions.get(sessionKey);
-  if (!session) return;
-  try {
-    session.close?.();
-  } catch {}
-  weixinQrSessions.delete(sessionKey);
+function normalizeAccountId(raw) {
+  return raw.trim().toLowerCase().replace(/@.*$/, '').replace(/[^a-z0-9-]/g, '-');
 }
 
-function cleanupWeixinQrSessions() {
-  const cutoff = Date.now() - WEIXIN_QR_TTL_MS;
-  for (const [sessionKey, session] of weixinQrSessions.entries()) {
-    if (!session?.startedAt || session.startedAt < cutoff) {
-      closeGatewaySession(sessionKey);
-    }
-  }
-}
-
-function createGatewayClient() {
-  if (!gatewayAuthPassword) {
-    throw Object.assign(new Error('OpenClaw gateway password is not configured'), { statusCode: 500 });
-  }
-
-  const ws = new WebSocket(GATEWAY_WS_URL);
-  const pending = new Map();
-  let closed = false;
-  let handshakeComplete = false;
-  let helloPayload = null;
-
-  const ready = new Promise((resolve, reject) => {
-    const fail = (error) => {
-      if (closed) return;
-      closed = true;
-      try { ws.close(); } catch {}
-      reject(error);
-      for (const waiter of pending.values()) {
-        waiter.reject(error);
-      }
-      pending.clear();
-    };
-
-    ws.addEventListener('message', (event) => {
-      let message;
-      try {
-        message = JSON.parse(typeof event.data === 'string' ? event.data : Buffer.from(event.data).toString('utf8'));
-      } catch {
-        return;
-      }
-
-      if (message?.type === 'event' && message.event === 'connect.challenge') {
-        sendFrame('connect', {
-          minProtocol: 3,
-          maxProtocol: 3,
-          client: {
-            id: 'gateway-client',
-            version: 'vm-monitor-dashboard',
-            platform: process.platform,
-            mode: 'backend',
-          },
-          auth: {
-            password: gatewayAuthPassword,
-          },
-          role: 'operator',
-          scopes: ['operator.admin'],
-        }, { id: 'connect' }).then((result) => {
-          handshakeComplete = true;
-          helloPayload = result;
-          resolve(result);
-        }).catch(fail);
-        return;
-      }
-
-      if (!message?.id) return;
-      const waiter = pending.get(String(message.id));
-      if (!waiter) return;
-      pending.delete(String(message.id));
-
-      if (message.ok === false || message.error) {
-        const source = message.error || {};
-        const error = Object.assign(new Error(source.message || 'Gateway RPC error'), {
-          code: source.code,
-          statusCode: 502,
-          details: source.details,
-        });
-        waiter.reject(error);
-        return;
-      }
-
-      waiter.resolve(message.payload ?? message.result ?? null);
-    });
-
-    ws.addEventListener('error', () => {
-      fail(Object.assign(new Error('Failed to connect to OpenClaw gateway WebSocket'), { statusCode: 502 }));
-    });
-
-    ws.addEventListener('close', () => {
-      if (closed) return;
-      fail(Object.assign(new Error(handshakeComplete ? 'Gateway WebSocket closed' : 'Gateway WebSocket closed before handshake completed'), { statusCode: 502 }));
-    });
-  });
-
-  function sendFrame(method, params, options = {}) {
-    const id = options.id || `${method}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
-    return new Promise((resolve, reject) => {
-      pending.set(String(id), { resolve, reject });
-      try {
-        ws.send(JSON.stringify({ type: 'req', id: String(id), method, params }));
-      } catch (error) {
-        pending.delete(String(id));
-        reject(error);
-      }
-    });
-  }
-
-  async function rpc(method, params) {
-    await ready;
-    if (method.startsWith('web.login.') && !helloPayload?.features?.methods?.includes(method)) {
-      throw Object.assign(new Error(`Gateway does not expose ${method} to this connection`), { statusCode: 502 });
-    }
-    return sendFrame(method, params);
-  }
-
-  return {
-    ws,
-    ready,
-    rpc,
-    close() {
-      closed = true;
-      try { ws.close(); } catch {}
-      for (const waiter of pending.values()) {
-        waiter.reject(Object.assign(new Error('Gateway session closed'), { statusCode: 499 }));
-      }
-      pending.clear();
-    },
+async function saveWeixinAccount(accountId, { token, baseUrl, userId }) {
+  await fsp.mkdir(WEIXIN_ACCOUNTS_DIR, { recursive: true });
+  const filePath = path.join(WEIXIN_ACCOUNTS_DIR, `${accountId}.json`);
+  const data = {
+    ...(token ? { token, savedAt: new Date().toISOString() } : {}),
+    ...(baseUrl ? { baseUrl } : {}),
+    ...(userId ? { userId } : {}),
   };
+  await fsp.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
+  await fsp.chmod(filePath, 0o600).catch(() => {});
+}
+
+async function triggerOpenClawReload() {
+  const configResult = await runCommand(OPENCLAW_BIN, [
+    'config', 'set', 'channels.openclaw-weixin.accounts', '{}', '--strict-json'
+  ], { timeout: 15000 });
+
+  if (configResult.ok) {
+    console.log('[weixin] Triggered channel reload via config update');
+    setTimeout(() => refreshOpenClawStatus().catch(() => {}), 3000);
+    return;
+  }
+
+  console.log('[weixin] Config update failed, triggering gateway restart...');
+  const restartResult = await runCommand(OPENCLAW_BIN, ['gateway', 'restart'], { timeout: 30000 });
+  if (!restartResult.ok) {
+    console.warn('[weixin] Gateway restart also failed:', restartResult.stderr);
+  }
+  setTimeout(() => refreshOpenClawStatus().catch(() => {}), 5000);
+}
+
+function cleanupQrSessions() {
+  const now = Date.now();
+  for (const [id, session] of qrSessions) {
+    if (now - session.startedAt > QR_SESSION_TTL_MS) qrSessions.delete(id);
+  }
+}
+
+async function handleWeixinQrStart(_req, res) {
+  cleanupQrSessions();
+
+  if (qrSessions.size >= QR_MAX_SESSIONS) {
+    return sendJson(res, 429, { error: 'Too many active QR sessions. Please wait.' });
+  }
+
+  try {
+    const qrResponse = await fetch('https://ilinkai.weixin.qq.com/ilink/bot/get_bot_qrcode?bot_type=3');
+    const qrData = await qrResponse.json();
+
+    if (!qrData.qrcode || !qrData.qrcode_img_content) {
+      return sendJson(res, 502, { error: 'Invalid response from WeChat API' });
+    }
+
+    const sessionId = crypto.randomUUID();
+    qrSessions.set(sessionId, {
+      qrcode: qrData.qrcode,
+      qrUrl: qrData.qrcode_img_content,
+      startedAt: Date.now(),
+    });
+
+    return sendJson(res, 200, { sessionId, qrUrl: qrData.qrcode_img_content });
+  } catch (error) {
+    return sendJson(res, 502, { error: error.message || 'Failed to contact WeChat API' });
+  }
+}
+
+async function handleWeixinQrStatus(res, searchParams) {
+  cleanupQrSessions();
+  const sessionId = searchParams.get('session');
+  const session = sessionId ? qrSessions.get(sessionId) : null;
+  if (!session) {
+    return sendJson(res, 404, { error: 'Session not found or expired' });
+  }
+
+  try {
+    const statusResponse = await fetch(
+      `https://ilinkai.weixin.qq.com/ilink/bot/get_qrcode_status?qrcode=${encodeURIComponent(session.qrcode)}`,
+      { headers: { 'iLink-App-ClientVersion': '1' } }
+    );
+    const statusData = await statusResponse.json();
+
+    if (statusData.status === 'confirmed' && statusData.bot_token && statusData.ilink_bot_id) {
+      const accountId = normalizeAccountId(statusData.ilink_bot_id);
+      await saveWeixinAccount(accountId, {
+        token: statusData.bot_token,
+        baseUrl: statusData.baseurl || 'https://ilinkai.weixin.qq.com',
+        userId: statusData.ilink_user_id,
+      });
+      await triggerOpenClawReload();
+      qrSessions.delete(sessionId);
+
+      return sendJson(res, 200, {
+        status: 'confirmed',
+        message: '✅ WeChat account linked successfully!',
+        accountId,
+      });
+    }
+
+    if (statusData.status === 'expired') {
+      qrSessions.delete(sessionId);
+    }
+
+    return sendJson(res, 200, {
+      status: statusData.status,
+      message: STATUS_MESSAGES[statusData.status] || 'Unknown status',
+    });
+  } catch (error) {
+    return sendJson(res, 502, { error: error.message || 'Failed to check QR status' });
+  }
 }
 
 async function readWeixinAccountIds() {
   try {
     const entries = await fsp.readdir(WEIXIN_ACCOUNTS_DIR, { withFileTypes: true });
     return entries
-      .filter((entry) => entry.isFile() && entry.name.endsWith('-im-bot.json') && !entry.name.endsWith('.sync.json'))
+      .filter((entry) => entry.isFile() && entry.name.endsWith('.json') && !entry.name.endsWith('.sync.json'))
       .map((entry) => entry.name.replace(/\.json$/, ''))
       .sort();
   } catch {
@@ -809,107 +782,6 @@ async function getCombinedWeixinStatus() {
     ...status,
     accounts: [...merged.values()].sort((a, b) => String(a.account).localeCompare(String(b.account))),
   };
-}
-
-function interpretWaitResult(result) {
-  const message = String(result?.message || 'Waiting for scan...');
-  const lowerMessage = message.toLowerCase();
-
-  if (result?.connected) {
-    return {
-      status: 'connected',
-      message,
-      accountId: result?.accountId || null,
-    };
-  }
-
-  if (lowerMessage.includes('expired') || lowerMessage.includes('expire')) {
-    return {
-      status: 'expired',
-      message,
-      accountId: result?.accountId || null,
-    };
-  }
-
-  return {
-    status: 'waiting',
-    message,
-    accountId: result?.accountId || null,
-  };
-}
-
-async function handleWeixinQrStart(_req, res) {
-  cleanupWeixinQrSessions();
-  const client = createGatewayClient();
-
-  try {
-    await client.ready;
-    const result = await client.rpc('web.login.start', { force: true });
-    if (!result?.qrDataUrl || !result?.sessionKey) {
-      client.close();
-      throw Object.assign(new Error('Gateway did not return a QR URL'), { statusCode: 502 });
-    }
-
-    weixinQrSessions.set(result.sessionKey, {
-      ws: client.ws,
-      rpc: client.rpc,
-      close: client.close,
-      startedAt: Date.now(),
-      pendingWait: null,
-    });
-
-    return sendJson(res, 200, {
-      qrUrl: result.qrDataUrl,
-      sessionKey: result.sessionKey,
-      message: result.message || null,
-    });
-  } catch (error) {
-    client.close();
-    throw error;
-  }
-}
-
-async function handleWeixinQrStatus(res, searchParams) {
-  cleanupWeixinQrSessions();
-  const sessionKey = searchParams.get('session');
-  const session = sessionKey ? weixinQrSessions.get(sessionKey) : null;
-  if (!session) {
-    return sendJson(res, 404, { error: 'QR session not found or expired' });
-  }
-
-  if (Date.now() - session.startedAt > WEIXIN_QR_TTL_MS) {
-    closeGatewaySession(sessionKey);
-    return sendJson(res, 200, { status: 'expired', message: 'QR code expired. Please generate a new one.' });
-  }
-
-  try {
-    if (!session.pendingWait) {
-      session.pendingWait = session.rpc('web.login.wait', { timeoutMs: WEIXIN_POLL_TIMEOUT_MS })
-        .finally(() => {
-          if (weixinQrSessions.get(sessionKey) === session) {
-            session.pendingWait = null;
-          }
-        });
-    }
-
-    const result = await session.pendingWait;
-    const payload = interpretWaitResult(result);
-
-    if (payload.status === 'connected') {
-      closeGatewaySession(sessionKey);
-      refreshOpenClawStatus().catch(() => {});
-    } else if (payload.status === 'expired') {
-      closeGatewaySession(sessionKey);
-    }
-
-    return sendJson(res, 200, payload);
-  } catch (error) {
-    closeGatewaySession(sessionKey);
-    return sendJson(res, 200, {
-      status: 'error',
-      message: error.message || 'Failed to read login status',
-    });
-  }
 }
 
 async function runOpenClawAction(kind) {
@@ -996,7 +868,6 @@ async function handleApi(req, res, pathname, searchParams) {
 
 async function bootstrap() {
   await ensureDataDir();
-  gatewayAuthPassword = loadGatewayPassword();
   await loadMonthlyTrafficState();
   await detectGatewayServiceName();
   await refreshOpenClawStatus();
@@ -1015,7 +886,7 @@ async function bootstrap() {
   }, SSE_INTERVAL_MS).unref();
 
   setInterval(() => {
-    cleanupWeixinQrSessions();
+    cleanupQrSessions();
   }, 60000).unref();
 
 }

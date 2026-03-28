@@ -304,7 +304,7 @@
       margin: 0 auto;
       padding: 16px;
       border-radius: 24px;
-      background: white;
+      background: transparent;
       box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06);
       display: grid;
       place-items: center;
@@ -686,8 +686,8 @@
         width: 280,
         margin: 2,
         color: {
-          dark: '#0f172a',
-          light: '#ffffff',
+          dark: '#ffffff',
+          light: '#00000000',
         },
       });
     }
@@ -742,7 +742,7 @@
           throw new Error(data.error || 'Failed to start QR login');
         }
 
-        state.currentSession = data.sessionKey || data.session;
+        state.currentSession = data.sessionId;
         await renderQrCode(data.qrUrl);
         setQrState('waiting', 'Waiting for scan…', 'Scan the QR code in WeChat to continue.');
         closeModal();
@@ -768,7 +768,7 @@
 
         if (state.currentSession !== session || state.pollAbort) return;
 
-        if (data.status === 'connected') {
+        if (data.status === 'confirmed') {
           setQrState('connected', '✅ Connected!', data.message || 'The account is now connected.', data.accountId || null);
           await fetchStatus().catch(() => {});
           return;
@@ -781,15 +781,7 @@
           return;
         }
 
-        if (data.status === 'error') {
-          setQrState('error', 'Login failed', data.message || 'Please generate a new QR code.');
-          qrOverlay.classList.add('visible');
-          qrOverlay.setAttribute('aria-hidden', 'false');
-          return;
-        }
-
-        const message = String(data.message || '').toLowerCase();
-        if (message.includes('scan')) {
+        if (data.status === 'scaned') {
           setQrState('scanned', 'Scanned! Confirm on phone…', data.message || 'Please confirm the login on the phone.');
         } else {
           setQrState('waiting', 'Waiting for scan…', data.message || 'Scan the QR code in WeChat to continue.');
