@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,6 +7,74 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <link rel="stylesheet" href="/styles.css" />
+  <script>
+  const LANG = {
+    en: {
+      'nav.title': 'Azure VM Dashboard',
+      'nav.health': 'System Healthy',
+      'section.subsystems': 'Sub-Systems',
+      'card.openclaw': 'OpenClaw Console',
+      'card.openclaw.desc': 'Manage OpenClaw gateway status, WeChat account connections, QR login, log viewing and graceful restart.',
+      'card.openclaw.action': 'Open Console',
+      'card.v2ray': 'V2ray / Xray',
+      'card.v2ray.desc': 'Proxy traffic monitoring and outbound node management. Coming soon.',
+      'card.v2ray.tbd': 'Coming Soon',
+      'section.metrics': 'VM Real-time Status',
+      'info.retention': 'Data retention policy: Monitoring metrics and log data are retained for the last 7 days only. Expired data is automatically cleaned up.',
+      'metric.cpu': 'CPU Usage',
+      'metric.memory': 'Memory Usage',
+      'metric.disk': 'Disk Space',
+      'metric.uptime': 'System Uptime',
+      'metric.network': 'Network Throughput',
+      'metric.connections': 'Active Connections',
+      'section.alerts': 'Alerts',
+      'section.processes': 'Top Processes',
+      'section.mounts': 'Mount Points',
+      'section.sysinfo': 'System Info',
+      'section.details': 'System Details',
+      'card.openclaw.sub': 'AI Gateway · WeChat Bot',
+      'card.v2ray.sub': 'Proxy Service (TBD)',
+      'section.vm': 'VM Metrics',
+    },
+    zh: {
+      'nav.title': 'Azure VM 监控面板',
+      'nav.health': '系统正常',
+      'section.subsystems': '业务实例管控',
+      'card.openclaw': 'OpenClaw 管控台',
+      'card.openclaw.desc': '管理 OpenClaw 网关状态、微信账号连接、二维码登录、日志查看及优雅重启。',
+      'card.openclaw.action': '进入控制台',
+      'card.v2ray': 'V2ray / Xray',
+      'card.v2ray.desc': '代理流量监控及出海节点状态管理。功能规划中。',
+      'card.v2ray.tbd': '即将上线',
+      'section.metrics': '虚拟机实时状态',
+      'info.retention': '数据保留策略：为保障轻量级 VM 存储健康，各项监控指标及日志数据仅追溯近 7 天，超期历史数据将由系统定时清理。',
+      'metric.cpu': 'CPU 使用率',
+      'metric.memory': '内存使用',
+      'metric.disk': '磁盘空间',
+      'metric.uptime': '系统运行时间',
+      'metric.network': '网络吞吐量',
+      'metric.connections': '活跃连接',
+      'section.alerts': '告警',
+      'section.processes': '进程列表',
+      'section.mounts': '挂载点',
+      'section.sysinfo': '系统信息',
+      'section.details': '系统详情',
+      'card.openclaw.sub': 'AI 网关 · 微信机器人',
+      'card.v2ray.sub': '代理服务 (TBD)',
+      'section.vm': '虚拟机指标',
+    }
+  };
+  function getCurrentLang() { return localStorage.getItem('vm-monitor-lang') || 'en'; }
+  function setLang(lang) { localStorage.setItem('vm-monitor-lang', lang); applyLang(lang); }
+  function applyLang(lang) {
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      const key = el.getAttribute('data-i18n');
+      el.textContent = LANG[lang]?.[key] || LANG['en']?.[key] || el.textContent;
+    });
+    const toggle = document.getElementById('lang-toggle');
+    if (toggle) toggle.value = lang;
+  }
+  </script>
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans min-h-screen">
 
@@ -14,7 +82,7 @@
   <nav class="sticky top-0 z-20 bg-white/90 backdrop-blur shadow-sm border-b border-slate-200">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between flex-wrap gap-3">
       <div class="flex items-center gap-3">
-        <h1 class="text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Azure VM Dashboard</h1>
+        <h1 class="text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent" data-i18n="nav.title">Azure VM Dashboard</h1>
         <div id="stream-status" class="live-pill px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200">Connecting stream…</div>
       </div>
       <div class="flex items-center gap-2 flex-wrap">
@@ -26,6 +94,10 @@
           <button data-hours="168" class="px-3 py-1.5 text-sm rounded-lg border border-slate-200 bg-white hover:bg-indigo-50 transition">7d</button>
         </div>
         <button id="refresh-btn" class="px-3 py-1.5 text-sm rounded-lg border border-slate-200 bg-white hover:bg-slate-100 transition">↻ Refresh</button>
+        <select id="lang-toggle" class="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white text-slate-600 focus:ring-1 focus:ring-indigo-300 outline-none">
+          <option value="en">EN</option>
+          <option value="zh">中文</option>
+        </select>
       </div>
     </div>
   </nav>
@@ -35,14 +107,14 @@
     <!-- Info Banner -->
     <div class="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3 text-sm text-indigo-700 flex items-center gap-2">
       <i data-lucide="info" class="w-4 h-4 shrink-0"></i>
-      数据保留 7 天。切换时间范围查看历史趋势。
+      <span data-i18n="info.retention">Data retention policy: Monitoring metrics and log data are retained for the last 7 days only. Expired data is automatically cleaned up.</span>
     </div>
 
     <!-- Section 1: 业务实例管控 -->
     <section>
       <h2 class="text-lg font-semibold text-slate-700 mb-4 flex items-center gap-2">
         <i data-lucide="layout-grid" class="w-5 h-5 text-indigo-500"></i>
-        业务实例管控
+        <span data-i18n="section.subsystems">Sub-Systems</span>
       </h2>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <!-- OpenClaw + WeChat (combined) -->
@@ -50,13 +122,13 @@
           <div class="flex items-center gap-3 mb-3">
             <div class="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center"><i data-lucide="bot" class="w-5 h-5 text-indigo-600"></i></div>
             <div>
-              <div class="font-semibold text-slate-700">OpenClaw 管控台</div>
-              <div class="text-xs text-slate-400">AI 网关 · 微信机器人</div>
+              <div class="font-semibold text-slate-700" data-i18n="card.openclaw">OpenClaw Console</div>
+              <div class="text-xs text-slate-400" data-i18n="card.openclaw.sub">AI Gateway · WeChat Bot</div>
             </div>
           </div>
-          <p class="text-sm text-slate-500 mb-3">管理 OpenClaw 网关状态、微信账号连接、二维码登录、日志查看及优雅重启。</p>
+          <p class="text-sm text-slate-500 mb-3" data-i18n="card.openclaw.desc">Manage OpenClaw gateway status, WeChat account connections, QR login, log viewing and graceful restart.</p>
           <div class="flex items-center text-sm font-medium text-indigo-600 group-hover:text-indigo-700">
-            进入控制台 <i data-lucide="arrow-right" class="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform"></i>
+            <span data-i18n="card.openclaw.action">Open Console</span> <i data-lucide="arrow-right" class="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform"></i>
           </div>
         </a>
         <!-- V2ray (TBD) -->
@@ -64,12 +136,12 @@
           <div class="flex items-center gap-3 mb-3">
             <div class="w-10 h-10 rounded-lg bg-slate-50 flex items-center justify-center"><i data-lucide="shield" class="w-5 h-5 text-slate-400"></i></div>
             <div>
-              <div class="font-semibold text-slate-400">V2ray / Xray</div>
-              <div class="text-xs text-slate-300">代理服务 (TBD)</div>
+              <div class="font-semibold text-slate-400" data-i18n="card.v2ray">V2ray / Xray</div>
+              <div class="text-xs text-slate-300" data-i18n="card.v2ray.sub">Proxy Service (TBD)</div>
             </div>
           </div>
-          <p class="text-sm text-slate-400 mb-3">代理流量监控及出海节点状态管理。功能规划中。</p>
-          <div class="flex items-center text-sm font-medium text-slate-300">即将上线</div>
+          <p class="text-sm text-slate-400 mb-3" data-i18n="card.v2ray.desc">Proxy traffic monitoring and outbound node management. Coming soon.</p>
+          <div class="flex items-center text-sm font-medium text-slate-300" data-i18n="card.v2ray.tbd">Coming Soon</div>
         </div>
       </div>
     </section>
@@ -86,7 +158,7 @@
     <section>
       <h2 class="text-lg font-semibold text-slate-700 mb-4 flex items-center gap-2">
         <i data-lucide="activity" class="w-5 h-5 text-indigo-500"></i>
-        虚拟机指标
+        <span data-i18n="section.vm">VM Metrics</span>
       </h2>
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -208,7 +280,7 @@
     <section>
       <h2 class="text-lg font-semibold text-slate-700 mb-4 flex items-center gap-2">
         <i data-lucide="list" class="w-5 h-5 text-indigo-500"></i>
-        系统详情
+        <span data-i18n="section.details">System Details</span>
       </h2>
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -276,6 +348,13 @@
   <script>
   // Initialize lucide icons
   if (typeof lucide !== 'undefined') lucide.createIcons();
+  // Initialize language
+  (function() {
+    const lang = getCurrentLang();
+    const toggle = document.getElementById('lang-toggle');
+    if (toggle) { toggle.value = lang; toggle.addEventListener('change', (e) => setLang(e.target.value)); }
+    applyLang(lang);
+  })();
   </script>
 </body>
 </html>

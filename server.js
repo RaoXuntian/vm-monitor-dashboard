@@ -248,8 +248,10 @@ async function getOpenClawStatus() {
     const weixinMatch = stdout.match(/openclaw-weixin\s*│\s*(ON|OFF)\s*│\s*(OK|WARN|ERROR)\s*│\s*(.*?)\s*│/i);
     const accountRows = [...stdout.matchAll(/^│\s*([a-z0-9-]+-im-bot)\s*│\s*(OK|WARN|ERROR|UNKNOWN)\s*│\s*(.*?)\s*│$/gim)].map((match) => ({
       account: match[1],
-      status: match[2],
-      notes: match[3],
+      id: match[1],
+      name: match[1],
+      status: match[2] === 'OK' ? 'online' : match[2].toLowerCase(),
+      notes: match[3].trim(),
     }));
     return {
       collectedAt: new Date().toISOString(),
@@ -842,14 +844,16 @@ async function getCombinedWeixinStatus() {
   const merged = new Map();
 
   for (const item of reportedAccounts) {
-    if (item?.account) merged.set(item.account, { ...item });
+    if (item?.account) merged.set(item.account, { ...item, id: item.id || item.account, name: item.name || item.account });
   }
 
   for (const accountId of knownIds) {
     if (!merged.has(accountId)) {
       merged.set(accountId, {
         account: accountId,
-        status: 'OFFLINE',
+        id: accountId,
+        name: accountId,
+        status: 'offline',
         notes: 'Account file present but not currently reported as online.',
       });
     }
