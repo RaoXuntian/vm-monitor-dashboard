@@ -12,7 +12,8 @@ const execFileAsync = promisify(execFile);
 const PORT = Number(process.env.PORT || 3000);
 const HOST = '127.0.0.1';
 const SAMPLE_INTERVAL_MS = Number(process.env.SAMPLE_INTERVAL_MS || 10000);
-const OPENCLAW_STATUS_INTERVAL_MS = Number(process.env.OPENCLAW_STATUS_INTERVAL_MS || 20000);
+const OPENCLAW_STATUS_INTERVAL_MS = Number(process.env.OPENCLAW_STATUS_INTERVAL_MS || 60000);
+const SERVICE_CHECK_INTERVAL_MS = 30000;
 const RETENTION_DAYS = 7;
 const SSE_INTERVAL_MS = 10000;
 const MONTHLY_TRAFFIC_FILE = 'monthly-traffic.json';
@@ -42,6 +43,7 @@ const cpuHistory = [];
 const memHistory = []; // Rolling buffer for 30s CPU avg (3 samples at 10s interval)
 const CPU_HISTORY_SIZE = 18; // 3 minutes at 10s interval
 let latestOpenClawStatus = null;
+let latestServiceHealth = [];
 let detectedGatewayServiceName = 'openclaw-gateway';
 let monthlyTrafficState = null;
 const sseClients = new Set();
@@ -236,7 +238,7 @@ async function detectGatewayServiceName() {
 
 async function getOpenClawStatus() {
   try {
-    const { stdout } = await execFileAsync(OPENCLAW_BIN, ['status', '--all'], { timeout: 30000 });
+    const { stdout } = await execFileAsync('/usr/bin/nice', ['-n', '10', OPENCLAW_BIN, 'status', '--all'], { timeout: 30000 });
     const gatewayRunning = stdout.includes('running (pid') || stdout.includes('state active') || /reachable\s+\d+ms/i.test(stdout);
     const sessionsMatch = stdout.match(/Agents\s+.*?(\d+)\s*sessions/i);
     const dashboardMatch = stdout.match(/Dashboard\s+│\s+(.*?)\s*│/i);
@@ -429,12 +431,11 @@ async function collectSample() {
   const memory = parseMemInfo();
   const network = parseNetDev();
   const tcpConnections = parseTcpConnections();
-  const [disk, topProcesses, mounts, monthlyTraffic, serviceHealth] = await Promise.all([
+  const [disk, topProcesses, mounts, monthlyTraffic] = await Promise.all([
     getDiskInfo(),
     getTopProcesses(),
     getMounts(),
     updateMonthlyTraffic(network, timestamp),
-    checkServiceHealth(),
   ]);
   const loadAverage = os.loadavg();
   const uptimeSec = os.uptime();
@@ -472,7 +473,7 @@ async function collectSample() {
     topProcesses,
     mounts,
     openclaw: latestOpenClawStatus,
-    serviceHealth,
+    serviceHealth: latestServiceHealth,
   };
 
   latestSample = sample;
@@ -1012,6 +1013,7 @@ async function bootstrap() {
   detectGatewayServiceName().catch(() => {});
   refreshOpenClawStatus().catch((err) => console.error('initial openclaw status error', err));
   collectSample().catch((err) => console.error('initial sample error', err));
+  checkServiceHealth().then(h => { latestServiceHealth = h; }).catch(() => {});
 
   setInterval(() => {
     collectSample().catch((err) => console.error('collector error', err));
@@ -1020,6 +1022,10 @@ async function bootstrap() {
   setInterval(() => {
     refreshOpenClawStatus().catch((err) => console.error('openclaw status error', err));
   }, OPENCLAW_STATUS_INTERVAL_MS).unref();
+
+  setInterval(() => {
+    checkServiceHealth().then(h => { latestServiceHealth = h; }).catch(() => {});
+  }, SERVICE_CHECK_INTERVAL_MS).unref();
 
   setInterval(() => {
     if (latestSample) broadcastSse(latestSample);
