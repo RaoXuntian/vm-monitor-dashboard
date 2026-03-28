@@ -22,6 +22,12 @@ const SYSTEMCTL_BIN = '/usr/bin/systemctl';
 const JOURNALCTL_BIN = '/usr/bin/journalctl';
 const BASH_BIN = '/bin/bash';
 const WEIXIN_QR_TTL_MS = 5 * 60 * 1000;
+const QR_RATE_LIMIT = {
+  maxAttempts: 5,
+  windowMs: 5 * 60 * 1000,
+  blockMs: 60 * 1000,
+  cleanupIntervalMs: 10 * 60 * 1000,
+};
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const DATA_DIR = path.join(ROOT, 'data');
@@ -43,6 +49,7 @@ let detectedGatewayServiceName = 'openclaw-gateway';
 let monthlyTrafficState = null;
 const sseClients = new Set();
 const weixinQrSessions = new Map();
+const qrAttempts = new Map();
 
 async function ensureDataDir() {
   await fsp.mkdir(DATA_DIR, { recursive: true });
@@ -54,6 +61,68 @@ function utcDateStamp(ts = Date.now()) {
 
 function currentMonthStamp(ts = Date.now()) {
   return new Date(ts).toISOString().slice(0, 7);
+}
+
+function getClientIp(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.trim()) {
+    return forwarded.split(',')[0].trim();
+  }
+  return req.socket.remoteAddress || 'unknown';
+}
+
+function isPasswordValid(input) {
+  const expected = '1874';
+  if (typeof input !== 'string') return false;
+  if (Buffer.byteLength(input) !== Buffer.byteLength(expected)) return false;
+  return crypto.timingSafeEqual(Buffer.from(input), Buffer.from(expected));
+}
+
+function checkQrRateLimit(ip) {
+  const now = Date.now();
+  const entry = qrAttempts.get(ip);
+  if (!entry) return { allowed: true };
+  if (entry.blockedUntil && now < entry.blockedUntil) {
+    return {
+      allowed: false,
+      retryAfter: Math.ceil((entry.blockedUntil - now) / 1000),
+    };
+  }
+  if (now - entry.firstAttempt > QR_RATE_LIMIT.windowMs) {
+    qrAttempts.delete(ip);
+    return { allowed: true };
+  }
+  if (entry.count >= QR_RATE_LIMIT.maxAttempts) {
+    entry.blockedUntil = now + QR_RATE_LIMIT.blockMs;
+    return {
+      allowed: false,
+      retryAfter: Math.ceil(QR_RATE_LIMIT.blockMs / 1000),
+    };
+  }
+  return { allowed: true };
+}
+
+function recordQrFailedAttempt(ip) {
+  const now = Date.now();
+  const entry = qrAttempts.get(ip) || { count: 0, firstAttempt: now, blockedUntil: null };
+  if (now - entry.firstAttempt > QR_RATE_LIMIT.windowMs) {
+    entry.count = 0;
+    entry.firstAttempt = now;
+    entry.blockedUntil = null;
+  }
+  entry.count += 1;
+  qrAttempts.set(ip, entry);
+}
+
+function cleanupQrAttempts() {
+  const now = Date.now();
+  for (const [ip, entry] of qrAttempts.entries()) {
+    const expiredWindow = now - entry.firstAttempt > QR_RATE_LIMIT.windowMs;
+    const expiredBlock = !entry.blockedUntil || now >= entry.blockedUntil;
+    if (expiredWindow && expiredBlock) {
+      qrAttempts.delete(ip);
+    }
+  }
 }
 
 function dataFileFor(ts) {
@@ -650,12 +719,29 @@ async function fetchJson(url, options = {}) {
 
 async function handleWeixinQrStart(req, res) {
   const body = await readRequestBody(req);
-  if (body.password !== '1874') {
+  const clientIp = getClientIp(req);
+  const rateCheck = checkQrRateLimit(clientIp);
+  if (!rateCheck.allowed) {
+    return sendJson(
+      res,
+      429,
+      { error: 'Too many attempts. Try again later.' },
+      { 'Retry-After': String(rateCheck.retryAfter) },
+    );
+  }
+
+  if (!isPasswordValid(body.password)) {
+    recordQrFailedAttempt(clientIp);
     return sendJson(res, 403, { error: 'Invalid password' });
   }
 
+  qrAttempts.delete(clientIp);
   cleanupWeixinQrSessions();
   const data = await fetchJson('https://ilinkai.weixin.qq.com/ilink/bot/get_bot_qrcode?bot_type=3');
+  if (!data.qrcode || !data.qrcode_img_content) {
+    return sendJson(res, 502, { error: 'Invalid response from WeChat API' });
+  }
+
   const sessionId = crypto.randomUUID();
   weixinQrSessions.set(sessionId, {
     qrcode: data.qrcode,
@@ -797,6 +883,10 @@ async function bootstrap() {
   setInterval(() => {
     cleanupWeixinQrSessions();
   }, 60000).unref();
+
+  setInterval(() => {
+    cleanupQrAttempts();
+  }, QR_RATE_LIMIT.cleanupIntervalMs).unref();
 }
 
 const server = http.createServer(async (req, res) => {
