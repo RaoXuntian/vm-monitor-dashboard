@@ -30,6 +30,7 @@
       'weixin.qr.title': 'Link New WeChat Account',
       'weixin.qr.subtitle': 'Scan QR code to login WeChat',
       'weixin.qr.generate': '🔗 Generate Login QR Code',
+      'weixin.qr.generating': 'Generating...',
       'weixin.qr.confirm.title': 'Confirm Action',
       'weixin.qr.confirm.text': 'This will generate a new login QR code. Existing connections may be replaced.',
       'weixin.qr.confirm.cancel': 'Cancel',
@@ -39,6 +40,8 @@
       'weixin.qr.confirmed': '✅ Account linked successfully!',
       'weixin.qr.expired': 'QR code expired',
       'weixin.qr.refresh': 'Click to refresh',
+      'weixin.qr.error': '❌ Generation failed',
+      'weixin.qr.status.error': 'Status query failed: ',
       'btn.restart': 'Restart',
       'btn.logs': 'View Logs',
       'btn.refresh': 'Refresh',
@@ -58,6 +61,7 @@
       'weixin.qr.title': '连接新微信账号',
       'weixin.qr.subtitle': '扫描二维码登录微信',
       'weixin.qr.generate': '🔗 生成登录二维码',
+      'weixin.qr.generating': '生成中…',
       'weixin.qr.confirm.title': '确认操作',
       'weixin.qr.confirm.text': '将生成新的登录二维码。已有账号连接可能会被替换。',
       'weixin.qr.confirm.cancel': '取消',
@@ -67,6 +71,8 @@
       'weixin.qr.confirmed': '✅ 连接成功！',
       'weixin.qr.expired': '二维码已过期',
       'weixin.qr.refresh': '点击刷新',
+      'weixin.qr.error': '❌ 生成失败',
+      'weixin.qr.status.error': '状态查询失败: ',
       'btn.restart': '重启',
       'btn.logs': '查看日志',
       'btn.refresh': '刷新',
@@ -397,27 +403,27 @@
 
     async function startQr() {
       qrBtn.disabled = true;
-      qrBtn.textContent = '生成中…';
+      qrBtn.textContent = t('weixin.qr.generating');
       pollAbort = true;
       currentSession = null;
       try {
         const res = await fetch('/api/weixin/qr/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || '生成失败');
+        if (!res.ok) throw new Error(data.error || t('weixin.qr.error'));
         currentSession = data.sessionId;
         qrArea.classList.remove('hidden');
         qrOverlay.classList.add('hidden');
         qrOverlay.classList.remove('flex');
         await QRCode.toCanvas(qrCanvas, data.qrUrl, { width: 280, margin: 2, color: { dark: '#1e293b', light: '#ffffff' } });
-        qrStatus.textContent = '等待扫码…请使用微信扫描二维码。';
+        qrStatus.textContent = t('weixin.qr.waiting');
         pollAbort = false;
         pollQr();
       } catch(e) {
-        qrStatus.textContent = '❌ ' + e.message;
+        qrStatus.textContent = t('weixin.qr.error') + ': ' + e.message;
         qrArea.classList.remove('hidden');
       } finally {
         qrBtn.disabled = false;
-        qrBtn.textContent = '🔗 生成登录二维码';
+        qrBtn.textContent = t('weixin.qr.generate');
       }
     }
 
@@ -429,14 +435,14 @@
         const res = await fetch('/api/weixin/qr/status?session=' + encodeURIComponent(session), { cache: 'no-store' });
         const data = await res.json();
         if (currentSession !== session || pollAbort) return;
-        if (data.status === 'confirmed') { qrStatus.textContent = '✅ 连接成功！' + (data.message || ''); return; }
-        if (data.status === 'expired') { qrStatus.textContent = '二维码已过期'; qrOverlay.classList.remove('hidden'); qrOverlay.classList.add('flex'); return; }
-        if (data.status === 'scaned') { qrStatus.textContent = '已扫码，请在手机上确认…'; }
-        else { qrStatus.textContent = '等待扫码…' + (data.message || ''); }
+        if (data.status === 'confirmed') { qrStatus.textContent = t('weixin.qr.confirmed') + (data.message || ''); return; }
+        if (data.status === 'expired') { qrStatus.textContent = t('weixin.qr.expired'); qrOverlay.classList.remove('hidden'); qrOverlay.classList.add('flex'); return; }
+        if (data.status === 'scaned') { qrStatus.textContent = t('weixin.qr.scanned'); }
+        else { qrStatus.textContent = t('weixin.qr.waiting') + (data.message ? ' ' + data.message : ''); }
         setTimeout(pollQr, 3000);
       } catch(e) {
         if (currentSession !== session || pollAbort) return;
-        qrStatus.textContent = '状态查询失败: ' + e.message;
+        qrStatus.textContent = t('weixin.qr.status.error') + e.message;
         qrOverlay.classList.remove('hidden'); qrOverlay.classList.add('flex');
       }
     }
