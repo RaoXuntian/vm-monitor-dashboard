@@ -1,1 +1,163 @@
-/* Legacy styles removed — now using Tailwind CSS via CDN */
+/* Tailwind handles most styling — this file is for SVG charts and custom components only */
+
+/* Chart containers */
+.chart-wrap {
+  height: 220px;
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+.chart-wrap.tall {
+  height: 270px;
+}
+.chart-wrap svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* SVG chart elements */
+.chart-grid { stroke: rgba(148, 163, 184, 0.15); stroke-width: 1; }
+.chart-path {
+  fill: none;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.chart-area { opacity: 0.9; }
+.chart-label { fill: #94a3b8; font-size: 11px; }
+
+/* Chart tooltip */
+.chart-tooltip {
+  display: none;
+  position: absolute;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 0.78rem;
+  color: #f1f5f9;
+  pointer-events: none;
+  z-index: 10;
+  backdrop-filter: blur(8px);
+  line-height: 1.6;
+  min-width: 140px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+.chart-tooltip .tooltip-time {
+  color: #94a3b8;
+  font-size: 0.72rem;
+  margin-bottom: 4px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  padding-bottom: 4px;
+}
+
+/* Gauge (disk) */
+.gauge-ring {
+  width: min(200px, 100%);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+.gauge-ring::before {
+  content: '';
+  position: absolute;
+  inset: 16px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+}
+.gauge-content { position: relative; text-align: center; }
+.gauge-value { font-size: 1.6rem; font-weight: 800; color: #1e293b; }
+.gauge-meta { color: #94a3b8; margin-top: 4px; font-size: 0.8rem; }
+
+/* Status badges */
+.status-badge { display: inline-flex; align-items: center; gap: 6px; }
+.status-badge::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.status-badge.healthy { background: #ecfdf5; color: #065f46; }
+.status-badge.healthy::before { background: #34d399; }
+.status-badge.warn { background: #fffbeb; color: #92400e; }
+.status-badge.warn::before { background: #fbbf24; }
+.status-badge.critical, .status-badge.unknown { background: #fef2f2; color: #991b1b; }
+.status-badge.critical::before, .status-badge.unknown::before { background: #fb7185; }
+
+/* Live pill */
+.live-pill.healthy {
+  background: #ecfdf5 !important;
+  color: #065f46 !important;
+  border-color: #a7f3d0 !important;
+}
+.live-pill.healthy::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #34d399;
+  box-shadow: 0 0 6px #34d399;
+  margin-right: 4px;
+}
+
+/* Range picker active state */
+#range-picker button.active {
+  background: #eef2ff;
+  border-color: #818cf8;
+  color: #4f46e5;
+  font-weight: 600;
+}
+
+/* Alert items */
+.alert-item {
+  padding: 10px 12px;
+  border-radius: 10px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+.alert-item.healthy { border-color: #a7f3d0; background: #ecfdf5; }
+.alert-item.warn { border-color: #fde68a; background: #fffbeb; }
+.alert-item.critical { border-color: #fecdd3; background: #fef2f2; }
+
+/* Port pills */
+.port-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+}
+
+/* Info rows (rendered by app.js into #node-info) */
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.875rem;
+}
+.info-row span:first-child { color: #94a3b8; }
+.info-row strong { color: #334155; font-weight: 600; }
+
+/* Hidden utility */
+.hidden { display: none !important; }
+.muted { color: #94a3b8; }
+
+/* Table rows */
+#process-table td, #mounts-table td {
+  padding: 8px 6px;
+  border-bottom: 1px solid #f1f5f9;
+}
