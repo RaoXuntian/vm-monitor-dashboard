@@ -17,7 +17,11 @@ node server.js
 # Open http://127.0.0.1:3000
 ```
 
+> **Note:** The server binds to `127.0.0.1` (loopback) only. It is not accessible from external networks. For external access, put it behind a reverse proxy such as [Caddy](https://caddyserver.com/).
+
 ## Systemd Service
+
+The unit file is pre-installed on this VM at `/etc/systemd/system/vm-monitor-dashboard.service`.
 
 ```bash
 sudo systemctl start vm-monitor-dashboard.service
@@ -26,6 +30,28 @@ sudo systemctl restart vm-monitor-dashboard.service
 systemctl status vm-monitor-dashboard.service
 journalctl -u vm-monitor-dashboard.service -f
 ```
+
+<details>
+<summary>Example unit file</summary>
+
+```ini
+[Unit]
+Description=VM Monitor Dashboard
+After=network.target
+
+[Service]
+Type=simple
+User=xtrao
+WorkingDirectory=/home/xtrao/repos/vm-monitor-dashboard
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+Environment=PORT=3000
+
+[Install]
+WantedBy=multi-user.target
+```
+
+</details>
 
 ## Dependencies
 
@@ -43,9 +69,10 @@ journalctl -u vm-monitor-dashboard.service -f
 | Variable | Default | Description |
 |---|---|---|
 | `PORT` | `3000` | HTTP listen port |
-| `HOST` | `127.0.0.1` | Listen address |
 | `SAMPLE_INTERVAL_MS` | `10000` | Metrics collection interval |
 | `OPENCLAW_STATUS_INTERVAL_MS` | `60000` | OpenClaw status polling interval |
+
+> **Note:** The server always binds to `127.0.0.1` (hardcoded). Use a reverse proxy (e.g. Caddy) for external access.
 
 ## API Endpoints
 
@@ -60,7 +87,26 @@ journalctl -u vm-monitor-dashboard.service -f
 | `POST` | `/api/weixin/qr/start` | Generate QR code for WeChat binding |
 | `GET` | `/api/weixin/qr/status?session=xxx` | Poll QR scan status |
 | `POST` | `/api/weixin/peers/alias` | Set user alias |
-| `POST` | `/api/actions/{action}` | Trigger actions (restart, logs) |
+| `POST` | `/api/actions/{action}` | Trigger actions (see below) |
+
+### Actions API
+
+All actions require `POST` with body `{"confirm": true}`.
+
+| Action | Description |
+|---|---|
+| `openclaw-restart` | Restart the OpenClaw gateway service |
+| `openclaw-logs` | Fetch recent OpenClaw gateway logs |
+| `weixin-restart` | Restart the WeChat channel |
+| `weixin-logs` | Fetch recent WeChat channel logs |
+
+Example:
+
+```bash
+curl -X POST http://127.0.0.1:3000/api/actions/openclaw-restart \
+  -H 'Content-Type: application/json' \
+  -d '{"confirm": true}'
+```
 
 ## Project Structure
 
