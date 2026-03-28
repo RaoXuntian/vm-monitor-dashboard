@@ -11,6 +11,7 @@ const state = {
   eventSource: null,
   pendingConfirmAction: null,
   sseReloadTimer: null,       // debounce SSE-triggered data reloads
+  downsampleCache: new Map(),  // cache downsampled series by timestamp range
 };
 
 // Debounce interval (ms) between SSE-triggered full data reloads.  Multiple SSE
@@ -68,10 +69,38 @@ function setActiveRange(hours) {
   });
 }
 
+function setRangePickerLoading(isLoading) {
+  const picker = document.getElementById('range-picker');
+  if (!picker) return;
+  picker.style.pointerEvents = isLoading ? 'none' : '';
+  picker.style.opacity = isLoading ? '0.6' : '';
+  document.querySelectorAll('#range-picker button').forEach((btn) => {
+    btn.disabled = isLoading;
+    if (isLoading && btn.classList.contains('active')) {
+      btn.style.position = 'relative';
+      if (!btn.querySelector('.loading-spinner')) {
+        const spinner = document.createElement('span');
+        spinner.className = 'loading-spinner';
+        spinner.textContent = '⏳';
+        spinner.style.cssText = 'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:14px;';
+        btn.appendChild(spinner);
+      }
+    }
+  });
+  if (!isLoading) {
+    document.querySelectorAll('.loading-spinner').forEach(s => s.remove());
+  }
+}
+
 async function loadData() {
   const res = await fetch(`/api/metrics?hours=${state.rangeHours}`, { cache: 'no-store' });
   state.payload = await res.json();
-  render();
+  // Batch render using requestAnimationFrame to avoid blocking the main thread
+  if (window.requestAnimationFrame) {
+    window.requestAnimationFrame(() => render());
+  } else {
+    render();
+  }
 }
 
 function updateStreamStatus(label, healthy = false) {
@@ -101,6 +130,7 @@ function render() {
   const monthlyTraffic = payload.monthlyTraffic || latest?.monthlyTraffic || { inbound: 0, outbound: 0, month: '--' };
   const tcpConnections = payload.tcpConnections || latest?.tcpConnections || { total: 0, byPort: [] };
 
+  // Update text content first (fast, non-blocking)
   setText('hostname-pill', `Hostname: ${latest?.hostname || '--'}`);
   setText('updated-pill', `Updated: ${latest ? new Date(latest.timestamp).toLocaleString() : '--'}`);
   setText('uptime-pill', `Uptime: ${formatDuration(latest?.uptimeSec)}`);
@@ -132,6 +162,7 @@ function render() {
   setText('platform-meta', `${latest?.platform || '--'} · ${latest?.arch || '--'}`);
   setText('tcp-card-total', `${tcpConnections.total ?? '--'}`);
 
+  // Update non-chart DOM elements
   renderNodeInfo(payload.node);
   renderTcpPorts(tcpConnections.byPort || []);
   renderAlerts(payload.alerts || [], payload.serviceHealth || []);
@@ -140,24 +171,30 @@ function render() {
   renderServices(services);
   renderGauge(latest?.disk?.usagePercent, latest?.disk?.used, latest?.disk?.total);
 
-  renderLineChart('chart-cpu', series, [
-    { key: 'cpuUsagePercent', color: '#61a8ff', gradientId: 'cpuGradient', fillFrom: 'rgba(97,168,255,0.40)', fillTo: 'rgba(97,168,255,0.02)', label: 'CPU' },
-  ], { yMin: 0, yMax: 100, ySuffix: '%' });
-
-  renderLineChart('chart-memory', series, [
-    { key: 'memoryUsagePercent', color: '#c28cff', gradientId: 'memoryGradient', fillFrom: 'rgba(194,140,255,0.38)', fillTo: 'rgba(194,140,255,0.02)', label: 'Memory' },
-  ], { yMin: 0, yMax: 100, ySuffix: '%' });
-
+  // Render charts with staggered scheduling to prevent blocking
   const allNetRates = series.flatMap((point) => [Math.max(0, point.networkRxRateBps || 0), Math.max(0, point.networkTxRateBps || 0)]);
-
-  // Use simple max with headroom instead of expensive P99 sort for better performance
   const maxVal = allNetRates.length > 0 ? Math.max(...allNetRates) : 1;
   const networkMax = Math.max(1, maxVal * 1.2);
 
-  renderLineChart('chart-network', series, [
-    { key: 'networkRxRateBps', color: '#63e2c6', gradientId: 'rxGradient', fillFrom: 'rgba(99,226,198,0.36)', fillTo: 'rgba(99,226,198,0.02)', label: 'Inbound' },
-    { key: 'networkTxRateBps', color: '#f6c760', gradientId: 'txGradient', fillFrom: 'rgba(246,199,96,0.26)', fillTo: 'rgba(246,199,96,0.02)', label: 'Outbound' },
-  ], { yMin: 0, yMax: networkMax, formatter: formatRate });
+  // Stagger chart renders across animation frames
+  requestAnimationFrame(() => {
+    renderLineChart('chart-cpu', series, [
+      { key: 'cpuUsagePercent', color: '#61a8ff', gradientId: 'cpuGradient', fillFrom: 'rgba(97,168,255,0.40)', fillTo: 'rgba(97,168,255,0.02)', label: 'CPU' },
+    ], { yMin: 0, yMax: 100, ySuffix: '%' });
+
+    requestAnimationFrame(() => {
+      renderLineChart('chart-memory', series, [
+        { key: 'memoryUsagePercent', color: '#c28cff', gradientId: 'memoryGradient', fillFrom: 'rgba(194,140,255,0.38)', fillTo: 'rgba(194,140,255,0.02)', label: 'Memory' },
+      ], { yMin: 0, yMax: 100, ySuffix: '%' });
+
+      requestAnimationFrame(() => {
+        renderLineChart('chart-network', series, [
+          { key: 'networkRxRateBps', color: '#63e2c6', gradientId: 'rxGradient', fillFrom: 'rgba(99,226,198,0.36)', fillTo: 'rgba(99,226,198,0.02)', label: 'Inbound' },
+          { key: 'networkTxRateBps', color: '#f6c760', gradientId: 'txGradient', fillFrom: 'rgba(246,199,96,0.26)', fillTo: 'rgba(246,199,96,0.02)', label: 'Outbound' },
+        ], { yMin: 0, yMax: networkMax, formatter: formatRate });
+      });
+    });
+  });
 }
 
 function renderNodeInfo(node) {
@@ -287,11 +324,18 @@ function renderGauge(value = 0, used, total) {
 /**
  * Downsample long timeseries into 5-minute buckets.
  * This keeps SVG DOM size manageable on 7-day views without materially changing
- * the operational shape of the chart.
+ * the operational shape of the chart. Results are cached to avoid recomputing.
  */
 function downsampleSeries(series) {
   const BUCKET_MS = 5 * 60 * 1000;
   if (!series.length) return [];
+
+  // Create cache key from first and last timestamp
+  const cacheKey = `${series[0].timestamp}-${series[series.length - 1].timestamp}-${series.length}`;
+  if (state.downsampleCache.has(cacheKey)) {
+    return state.downsampleCache.get(cacheKey);
+  }
+
   const downsampled = [];
   let bucketStart = series[0].timestamp;
   let bucket = [];
@@ -304,6 +348,14 @@ function downsampleSeries(series) {
     bucket.push(point);
   }
   if (bucket.length) downsampled.push(bucket[bucket.length - 1]);
+
+  // Cache the result, but keep cache size limited
+  if (state.downsampleCache.size > 10) {
+    const firstKey = state.downsampleCache.keys().next().value;
+    state.downsampleCache.delete(firstKey);
+  }
+  state.downsampleCache.set(cacheKey, downsampled);
+
   return downsampled;
 }
 
@@ -606,7 +658,12 @@ document.querySelectorAll('#range-picker button').forEach((btn) => {
   btn.addEventListener('click', async () => {
     const hours = Number(btn.dataset.hours);
     setActiveRange(hours);
-    await loadData();
+    setRangePickerLoading(true);
+    try {
+      await loadData();
+    } finally {
+      setRangePickerLoading(false);
+    }
   });
 });
 
