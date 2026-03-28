@@ -91,18 +91,12 @@
         </div>
       </div>
 
-      <!-- Bot Accounts -->
-      <div id="weixin-accounts" class="space-y-2 mb-4"></div>
+      <!-- Bot Accounts (hidden, data used internally) -->
+      <div id="weixin-accounts" class="hidden"></div>
 
-      <!-- Connected Users (peers) -->
-      <div class="border-t border-slate-100 pt-4">
-        <h4 class="text-sm font-semibold text-slate-600 mb-3 flex items-center gap-2">
-          <i data-lucide="users" class="w-4 h-4 text-slate-400"></i>
-          已连接用户
-        </h4>
-        <div id="peers-list" class="space-y-2">
-          <p class="text-sm text-slate-400">Loading...</p>
-        </div>
+      <!-- Connected Users (peers) with status -->
+      <div id="peers-list" class="space-y-2">
+        <p class="text-sm text-slate-400">Loading...</p>
       </div>
     </section>
 
@@ -345,23 +339,27 @@
           container.innerHTML = '<p class="text-sm text-slate-400">No connected users found</p>';
           return;
         }
-        container.innerHTML = data.peers.map(p => `
-          <div class="flex items-center justify-between py-2 px-3 bg-slate-50 rounded-lg">
-            <div class="flex-1 min-w-0 mr-3">
-              <div class="flex items-center gap-2">
-                <span class="text-sm font-semibold text-slate-700">${p.alias || 'No alias'}</span>
-                <span class="text-xs text-slate-400 truncate">${p.peerId}</span>
+        container.innerHTML = data.peers.map(p => {
+          const name = p.alias || p.peerId;
+          const initial = name[0]?.toUpperCase() || '?';
+          return `
+          <div class="flex items-center justify-between py-2.5 px-3 bg-slate-50 rounded-lg">
+            <div class="flex items-center gap-3 flex-1 min-w-0 mr-3">
+              <div class="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-xs font-bold shrink-0">${initial}</div>
+              <div class="flex-1 min-w-0">
+                <div class="text-sm font-semibold text-slate-700">${p.alias || '<span class=&quot;text-slate-400&quot;>No alias</span>'}</div>
+                <div class="text-xs text-slate-400 truncate">${p.peerId}</div>
               </div>
-              <div class="text-xs text-slate-400">via ${p.accountId}</div>
             </div>
             <div class="flex items-center gap-2 shrink-0">
-              <input type="text" class="w-24 px-2 py-1 text-sm border border-slate-200 rounded focus:ring-1 focus:ring-indigo-300 outline-none"
+              <input type="text" class="w-20 px-2 py-1 text-sm border border-slate-200 rounded focus:ring-1 focus:ring-indigo-300 outline-none"
                      placeholder="Alias" value="${p.alias || ''}" data-peer-id="${p.peerId}">
               <button class="text-xs px-2 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition"
                       onclick="saveAlias(this)">Save</button>
+              <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">OK</span>
             </div>
-          </div>
-        `).join('');
+          </div>`;
+        }).join('');
       } catch(e) {
         document.getElementById('peers-list').innerHTML = '<p class="text-sm text-red-400">Failed to load peers</p>';
       }
