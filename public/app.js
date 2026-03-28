@@ -1,3 +1,10 @@
+/**
+ * Dashboard rendering module.
+ *
+ * This file owns client-side state, API fetching, SSE subscription, DOM updates,
+ * and all SVG chart rendering for the main dashboard page. HTML provides the
+ * containers; this module turns API payloads into a live operations view.
+ */
 const state = {
   rangeHours: 24,
   payload: null,
@@ -9,6 +16,7 @@ const $ = (id) => document.getElementById(id);
 const fmtPct = (n) => n == null ? '--' : `${Number(n).toFixed(1)}%`;
 const fmtNum = (n, digits = 2) => n == null ? '--' : Number(n).toFixed(digits);
 
+/** Format bytes into human-readable units for cards, tables, and tooltips. */
 function formatBytes(bytes) {
   if (!Number.isFinite(bytes)) return '--';
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -21,11 +29,13 @@ function formatBytes(bytes) {
   return `${value.toFixed(value >= 100 || i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
+/** Format a bytes/sec number using the same unit system as formatBytes(). */
 function formatRate(bytesPerSec) {
   if (!Number.isFinite(bytesPerSec)) return '--';
   return `${formatBytes(bytesPerSec)}/s`;
 }
 
+/** Format uptime-style durations compactly so cards stay visually stable. */
 function formatDuration(sec) {
   if (!Number.isFinite(sec)) return '--';
   const d = Math.floor(sec / 86400);
@@ -64,10 +74,16 @@ function updateStreamStatus(label, healthy = false) {
   el.classList.toggle('healthy', healthy);
 }
 
+// Network charts need the last point with a valid computed rate, not just the latest sample.
 function getLatestNetworkPoint(series) {
   return [...(series || [])].reverse().find((point) => Number.isFinite(point.networkRxRateBps) || Number.isFinite(point.networkTxRateBps));
 }
 
+/**
+ * Main render pass triggered after every API load or SSE refresh.
+ * Reads the normalized backend payload, updates cards/tables, then hands each
+ * chart container to renderLineChart().
+ */
 function render() {
   const payload = state.payload;
   if (!payload) return;
@@ -127,8 +143,14 @@ function render() {
   ], { yMin: 0, yMax: 100, ySuffix: '%' });
 
   const allNetRates = series.flatMap((point) => [Math.max(0, point.networkRxRateBps || 0), Math.max(0, point.networkTxRateBps || 0)]);
-  const maxVal = allNetRates.length > 0 ? Math.max(...allNetRates) : 1;
-  const networkMax = Math.max(1, maxVal * 1.1);
+
+  // Network bursts are spiky, so use a high-percentile-style ceiling instead of
+  // a strict max. Sorting and taking the 99th percentile keeps one outlier from
+  // flattening the whole chart; 1.2x headroom prevents the line from hugging the top.
+  const sortedNetRates = allNetRates.filter(Number.isFinite).sort((a, b) => a - b);
+  const p99 = sortedNetRates.length ? sortedNetRates[Math.min(sortedNetRates.length - 1, Math.floor(sortedNetRates.length * 0.99))] : 1;
+  const networkMax = Math.max(1, p99 * 1.2);
+
   renderLineChart('chart-network', series, [
     { key: 'networkRxRateBps', color: '#63e2c6', gradientId: 'rxGradient', fillFrom: 'rgba(99,226,198,0.36)', fillTo: 'rgba(99,226,198,0.02)', label: 'Inbound' },
     { key: 'networkTxRateBps', color: '#f6c760', gradientId: 'txGradient', fillFrom: 'rgba(246,199,96,0.26)', fillTo: 'rgba(246,199,96,0.02)', label: 'Outbound' },
@@ -154,6 +176,11 @@ function renderTcpPorts(byPort) {
     : '<div class="muted">No established TCP connections</div>';
 }
 
+/**
+ * Render alert rows by combining backend capacity alerts with per-service health.
+ * The backend already summarizes CPU/memory/disk, while serviceHealth is expanded
+ * client-side into a friendlier operational list.
+ */
 function renderAlerts(alerts, serviceHealth) {
   const el = $('alert-list');
   const rows = [];
@@ -195,6 +222,11 @@ function badgeClassForWeixin(services) {
   return 'critical';
 }
 
+/**
+ * Render service status badges when those elements exist.
+ * Null guards matter because app.js is also loaded on pages that don't include
+ * the gateway/weixin badge placeholders.
+ */
 function renderServices(services) {
   const gatewayBadge = $('gateway-badge');
   const weixinBadge = $('weixin-badge');
@@ -236,6 +268,7 @@ function renderMounts(mounts) {
   `).join('') || '<tr><td colspan="4">No filesystem data</td></tr>';
 }
 
+// Gauge is intentionally simple; disk usage changes slowly enough that a radial snapshot works well.
 function renderGauge(value = 0, used, total) {
   const pct = Math.max(0, Math.min(100, value || 0));
   $('disk-gauge').innerHTML = `
@@ -248,6 +281,11 @@ function renderGauge(value = 0, used, total) {
   `;
 }
 
+/**
+ * Downsample long timeseries into 5-minute buckets.
+ * This keeps SVG DOM size manageable on 7-day views without materially changing
+ * the operational shape of the chart.
+ */
 function downsampleSeries(series) {
   const BUCKET_MS = 5 * 60 * 1000;
   if (!series.length) return [];
@@ -266,7 +304,12 @@ function downsampleSeries(series) {
   return downsampled;
 }
 
-function toSplinePath(points) {
+/**
+ * Convert line points into a smooth cubic Bézier path.
+ * The smoothing makes noisy operational data easier to read without changing the
+ * underlying sample order or tooltip values.
+ */
+function smoothPath(points) {
   if (!points.length) return '';
   if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
   let d = `M ${points[0].x} ${points[0].y}`;
@@ -284,6 +327,11 @@ function toSplinePath(points) {
   return d;
 }
 
+/**
+ * Render an interactive SVG line chart with gradient fill and tooltip support.
+ * HTML only provides the SVG mount point; all axes, paths, overlays, and tooltip
+ * behavior are generated here.
+ */
 function renderLineChart(id, series, defs, options) {
   const svg = $(id);
   const container = svg.parentElement;
@@ -303,7 +351,7 @@ function renderLineChart(id, series, defs, options) {
 
   const x = (ts) => pad.left + ((ts - minTs) / Math.max(1, maxTs - minTs)) * innerW;
   const y = (v) => {
-    const safe = Math.max(v, yMin); // clean negative values, but do NOT cap at yMax — absolute scaling handles it
+    const safe = Math.max(v, yMin); // Clean negative values, but don't cap spikes above yMax abruptly.
     return pad.top + innerH - ((safe - yMin) / Math.max(1, yMax - yMin)) * innerH;
   };
 
@@ -334,7 +382,7 @@ function renderLineChart(id, series, defs, options) {
   const lineMarkup = defs.map((def) => {
     const points = plotSeries.filter((point) => Number.isFinite(point[def.key])).map((point) => ({ x: x(point.timestamp), y: y(point[def.key]), source: point }));
     if (!points.length) return '';
-    const pathD = toSplinePath(points);
+    const pathD = smoothPath(points);
     const areaD = `${pathD} L ${points.at(-1).x} ${pad.top + innerH} L ${points[0].x} ${pad.top + innerH} Z`;
     return `
       <path class="chart-area" d="${areaD}" fill="url(#${def.gradientId})" />
@@ -344,6 +392,7 @@ function renderLineChart(id, series, defs, options) {
 
   svg.innerHTML = `<defs>${gradients}</defs>${grid}${lineMarkup}${timeLabels}`;
 
+  // Transparent overlay captures mouse/touch interaction without interfering with the lines.
   const overlayRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
   overlayRect.setAttribute('x', pad.left);
   overlayRect.setAttribute('y', pad.top);
@@ -524,6 +573,11 @@ function bindActionButtons() {
   });
 }
 
+/**
+ * Connect to the live SSE stream.
+ * Every message triggers a full reload from /api/metrics so the page stays in sync
+ * with the selected time range, not just the single latest sample.
+ */
 function connectStream() {
   if (state.eventSource) state.eventSource.close();
   const es = new EventSource('/api/stream');
@@ -553,6 +607,8 @@ $('modal-close').addEventListener('click', closeModal);
 $('log-modal').addEventListener('click', (event) => {
   if (event.target.dataset.close === 'modal') closeModal();
 });
+
+// Re-render on resize so SVG dimensions track responsive layout changes.
 window.addEventListener('resize', () => state.payload && render());
 setActiveRange(state.rangeHours);
 

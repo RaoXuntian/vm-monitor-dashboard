@@ -1,6 +1,7 @@
-/* Tailwind handles most styling — this file is for SVG charts and custom components only */
+/* Tailwind covers the general layout; this file holds the custom dashboard pieces
+   that are easier to maintain as plain CSS than utility classes. */
 
-/* Chart containers */
+/* Chart wrappers define a consistent viewport for responsive SVG charts. */
 .chart-wrap {
   height: 220px;
   position: relative;
@@ -8,16 +9,20 @@
   overflow: hidden;
   border-radius: 0 0 0.75rem 0.75rem;
 }
+
+/* Taller variant used for the CPU and memory cards, where more vertical room helps. */
 .chart-wrap.tall {
   height: 270px;
 }
+
+/* SVG should fill the wrapper exactly so app.js can compute dimensions predictably. */
 .chart-wrap svg {
   width: 100%;
   height: 100%;
   display: block;
 }
 
-/* SVG chart elements */
+/* Core SVG chart primitives: grid, line, area fill, and labels. */
 .chart-grid { stroke: rgba(148, 163, 184, 0.15); stroke-width: 1; }
 .chart-path {
   fill: none;
@@ -28,7 +33,7 @@
 .chart-area { opacity: 0.9; }
 .chart-label { fill: #94a3b8; font-size: 11px; }
 
-/* Chart tooltip */
+/* Floating chart tooltip rendered and positioned by app.js. */
 .chart-tooltip {
   display: none;
   position: absolute;
@@ -45,6 +50,8 @@
   min-width: 140px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
 }
+
+/* Muted timestamp row separates the x-axis time from metric values. */
 .chart-tooltip .tooltip-time {
   color: #94a3b8;
   font-size: 0.72rem;
@@ -53,7 +60,7 @@
   padding-bottom: 4px;
 }
 
-/* Gauge (disk) */
+/* Disk gauge shell uses a conic-gradient for the progress arc. */
 .gauge-ring {
   width: min(200px, 100%);
   aspect-ratio: 1;
@@ -62,6 +69,8 @@
   display: grid;
   place-items: center;
 }
+
+/* Inner white circle creates the donut effect and keeps text legible. */
 .gauge-ring::before {
   content: '';
   position: absolute;
@@ -70,11 +79,13 @@
   background: #ffffff;
   border: 1px solid #e2e8f0;
 }
+
+/* Gauge content stays above the pseudo-element. */
 .gauge-content { position: relative; text-align: center; }
 .gauge-value { font-size: 1.6rem; font-weight: 800; color: #1e293b; }
 .gauge-meta { color: #94a3b8; margin-top: 4px; font-size: 0.8rem; }
 
-/* Status badges */
+/* Generic status badge used for service health pills across pages. */
 .status-badge { display: inline-flex; align-items: center; gap: 6px; }
 .status-badge::before {
   content: '';
@@ -89,7 +100,7 @@
 .status-badge.critical, .status-badge.unknown { background: #fef2f2; color: #991b1b; }
 .status-badge.critical::before, .status-badge.unknown::before { background: #fb7185; }
 
-/* Live pill */
+/* Live SSE pill gets a glowing dot only when the connection is healthy. */
 .live-pill.healthy {
   background: #ecfdf5 !important;
   color: #065f46 !important;
@@ -106,7 +117,7 @@
   margin-right: 4px;
 }
 
-/* Range picker active state */
+/* Active time-range button needs a stronger cue than Tailwind hover states alone. */
 #range-picker button.active {
   background: #eef2ff;
   border-color: #818cf8;
@@ -114,7 +125,7 @@
   font-weight: 600;
 }
 
-/* Alert items */
+/* Alert rows style backend alerts and client-expanded service health uniformly. */
 .alert-item {
   padding: 10px 12px;
   border-radius: 10px;
@@ -131,7 +142,7 @@
 .alert-item.unconfigured { border-color: #d1d5db; background: #f3f4f6; color: #6b7280; }
 .alert-item.unconfigured strong { color: #9ca3af; }
 
-/* Port pills */
+/* Compact TCP port pills fit several hot ports into a small card footer. */
 .port-pill {
   display: inline-flex;
   align-items: center;
@@ -144,7 +155,7 @@
   color: #475569;
 }
 
-/* Info rows (rendered by app.js into #node-info) */
+/* Key/value rows rendered by app.js into the system info card. */
 .info-row {
   display: flex;
   justify-content: space-between;
@@ -156,11 +167,11 @@
 .info-row span:first-child { color: #94a3b8; }
 .info-row strong { color: #334155; font-weight: 600; }
 
-/* Hidden utility */
+/* Shared utility classes for JS-driven visibility and muted fallback text. */
 .hidden { display: none !important; }
 .muted { color: #94a3b8; }
 
-/* Table rows */
+/* Table cell spacing for process and filesystem tables. */
 #process-table td, #mounts-table td {
   padding: 8px 6px;
   border-bottom: 1px solid #f1f5f9;

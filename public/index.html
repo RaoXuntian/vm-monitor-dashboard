@@ -8,6 +8,8 @@
   <script src="https://unpkg.com/lucide@latest"></script>
   <link rel="stylesheet" href="/styles.css" />
   <script>
+  // Lightweight page-level i18n dictionary. Text nodes are mapped by data-i18n
+  // keys so the same HTML structure works for English and Chinese.
   const LANG = {
     en: {
       'nav.title': 'Azure VM Dashboard',
@@ -64,8 +66,11 @@
       'section.vm': '虚拟机指标',
     }
   };
+
   function getCurrentLang() { return localStorage.getItem('vm-monitor-lang') || 'en'; }
   function setLang(lang) { localStorage.setItem('vm-monitor-lang', lang); applyLang(lang); }
+
+  // Translate every node that declares data-i18n, then sync the language picker.
   function applyLang(lang) {
     document.querySelectorAll('[data-i18n]').forEach(el => {
       const key = el.getAttribute('data-i18n');
@@ -78,7 +83,7 @@
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans min-h-screen">
 
-  <!-- Sticky Nav -->
+  <!-- Sticky top bar: range picker, manual refresh, language toggle, and SSE status. -->
   <nav class="sticky top-0 z-20 bg-white/90 backdrop-blur shadow-sm border-b border-slate-200">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between flex-wrap gap-3">
       <div class="flex items-center gap-3">
@@ -86,6 +91,7 @@
         <div id="stream-status" class="live-pill px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200">Connecting stream…</div>
       </div>
       <div class="flex items-center gap-2 flex-wrap">
+        <!-- Time window picker drives /api/metrics?hours=... requests in app.js. -->
         <div class="flex gap-1" id="range-picker">
           <button data-hours="1" class="px-3 py-1.5 text-sm rounded-lg border border-slate-200 bg-white hover:bg-indigo-50 transition">1h</button>
           <button data-hours="6" class="px-3 py-1.5 text-sm rounded-lg border border-slate-200 bg-white hover:bg-indigo-50 transition">6h</button>
@@ -104,20 +110,20 @@
 
   <main class="max-w-7xl mx-auto px-4 py-6 space-y-8">
 
-    <!-- Info Banner -->
+    <!-- Retention policy banner so operators know history is intentionally short-lived. -->
     <div class="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3 text-sm text-indigo-700 flex items-center gap-2">
       <i data-lucide="info" class="w-4 h-4 shrink-0"></i>
       <span data-i18n="info.retention">Data retention policy: Monitoring metrics and log data are retained for the last 7 days only. Expired data is automatically cleaned up.</span>
     </div>
 
-    <!-- Section 1: 业务实例管控 -->
+    <!-- Sub-system cards: quick jump into service-specific consoles. -->
     <section>
       <h2 class="text-lg font-semibold text-slate-700 mb-4 flex items-center gap-2">
         <i data-lucide="layout-grid" class="w-5 h-5 text-indigo-500"></i>
         <span data-i18n="section.subsystems">Sub-Systems</span>
       </h2>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <!-- OpenClaw + WeChat (combined) -->
+        <!-- OpenClaw management entry point. -->
         <a href="/weixin" class="bg-white rounded-xl p-5 shadow-sm border border-slate-100 hover:shadow-md transition group">
           <div class="flex items-center gap-3 mb-3">
             <div class="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center"><i data-lucide="bot" class="w-5 h-5 text-indigo-600"></i></div>
@@ -131,7 +137,8 @@
             <span data-i18n="card.openclaw.action">Open Console</span> <i data-lucide="arrow-right" class="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform"></i>
           </div>
         </a>
-        <!-- V2ray (TBD) -->
+
+        <!-- Placeholder for the next control surface once proxy metrics are implemented. -->
         <div class="bg-white rounded-xl p-5 shadow-sm border border-dashed border-slate-200 opacity-50">
           <div class="flex items-center gap-3 mb-3">
             <div class="w-10 h-10 rounded-lg bg-slate-50 flex items-center justify-center"><i data-lucide="shield" class="w-5 h-5 text-slate-400"></i></div>
@@ -146,7 +153,7 @@
       </div>
     </section>
 
-    <!-- Status Strip -->
+    <!-- Small status pills give "at a glance" state before you scan the charts. -->
     <section class="flex flex-wrap gap-2">
       <div id="hostname-pill" class="px-3 py-1.5 rounded-full text-xs font-medium bg-white border border-slate-200 text-slate-600">Hostname: --</div>
       <div id="updated-pill" class="px-3 py-1.5 rounded-full text-xs font-medium bg-white border border-slate-200 text-slate-600">Updated: --</div>
@@ -154,7 +161,7 @@
       <div id="connections-pill" class="px-3 py-1.5 rounded-full text-xs font-medium bg-white border border-slate-200 text-slate-600">TCP: --</div>
     </section>
 
-    <!-- Section 2: VM Metrics -->
+    <!-- Primary metrics section: cards summarize current state, charts show history. -->
     <section>
       <h2 class="text-lg font-semibold text-slate-700 mb-4 flex items-center gap-2">
         <i data-lucide="activity" class="w-5 h-5 text-indigo-500"></i>
@@ -162,7 +169,7 @@
       </h2>
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <!-- CPU Card -->
+        <!-- CPU card: current usage, peak/avg summary, historical line chart. -->
         <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
           <div class="flex justify-between items-start mb-3">
             <div>
@@ -180,10 +187,11 @@
           <div class="text-xs text-slate-400 mb-2 flex items-center gap-2">
             <span class="inline-block w-4 h-0.5 rounded bg-blue-400"></span> CPU usage
           </div>
+          <!-- SVG is rendered by public/app.js so HTML stays layout-focused. -->
           <div class="chart-wrap tall"><svg id="chart-cpu"></svg></div>
         </div>
 
-        <!-- Memory Card -->
+        <!-- Memory card mirrors CPU so operators can compare resource pressure quickly. -->
         <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
           <div class="flex justify-between items-start mb-3">
             <div>
@@ -204,7 +212,7 @@
           <div class="chart-wrap tall"><svg id="chart-memory"></svg></div>
         </div>
 
-        <!-- Network Card -->
+        <!-- Network card emphasizes live throughput plus TCP and monthly transfer totals. -->
         <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
           <div class="flex justify-between items-start mb-3">
             <div>
@@ -234,7 +242,7 @@
           <div class="chart-wrap"><svg id="chart-network"></svg></div>
         </div>
 
-        <!-- Disk Card -->
+        <!-- Disk card uses a radial gauge because filesystem pressure changes slowly. -->
         <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
           <div class="mb-3">
             <div class="text-sm font-medium text-slate-500 flex items-center gap-1.5"><i data-lucide="database" class="w-4 h-4"></i> Disk Usage</div>
@@ -245,29 +253,29 @@
         </div>
       </div>
 
-      <!-- Second row: small info cards -->
+      <!-- Secondary info cards: denser operational details under the main charts. -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
-        <!-- System Info -->
+        <!-- Host/node metadata populated from the latest API payload. -->
         <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
           <div class="text-sm font-medium text-slate-500 mb-3 flex items-center gap-1.5"><i data-lucide="server" class="w-4 h-4"></i> System Info</div>
           <div id="node-info" class="space-y-2 text-sm"></div>
         </div>
 
-        <!-- Uptime -->
+        <!-- Availability is derived from uptime across the selected sample window. -->
         <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
           <div class="text-sm font-medium text-slate-500 mb-3 flex items-center gap-1.5"><i data-lucide="clock" class="w-4 h-4"></i> Uptime & Availability</div>
           <div class="text-3xl font-bold text-slate-800" id="availability-now">--</div>
           <div class="text-sm text-slate-500 mt-1" id="availability-meta">Uptime --</div>
         </div>
 
-        <!-- Hostname -->
+        <!-- Separate hostname card keeps machine identity visible during screenshots. -->
         <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
           <div class="text-sm font-medium text-slate-500 mb-3 flex items-center gap-1.5"><i data-lucide="monitor" class="w-4 h-4"></i> Hostname</div>
           <div class="text-xl font-bold text-slate-800 break-all" id="hostname-value">--</div>
           <div class="text-sm text-slate-500 mt-1" id="platform-meta">--</div>
         </div>
 
-        <!-- TCP Connections -->
+        <!-- Top ports highlight where established TCP sessions are concentrated. -->
         <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
           <div class="text-sm font-medium text-slate-500 mb-3 flex items-center gap-1.5"><i data-lucide="network" class="w-4 h-4"></i> Active Connections</div>
           <div class="text-3xl font-bold text-slate-800" id="tcp-card-total">--</div>
@@ -276,7 +284,7 @@
       </div>
     </section>
 
-    <!-- Section 4: System Details -->
+    <!-- Tables and alert list for the operational details operators inspect last. -->
     <section>
       <h2 class="text-lg font-semibold text-slate-700 mb-4 flex items-center gap-2">
         <i data-lucide="list" class="w-5 h-5 text-indigo-500"></i>
@@ -284,13 +292,13 @@
       </h2>
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <!-- Alerts -->
+        <!-- Alerts combines backend health summaries with per-service rows in app.js. -->
         <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100" id="alerts-list">
           <div class="text-sm font-medium text-slate-500 mb-3 flex items-center gap-1.5"><i data-lucide="bell" class="w-4 h-4"></i> Alerts</div>
           <div id="alert-list" class="space-y-2"></div>
         </div>
 
-        <!-- Top Processes -->
+        <!-- Top processes reveal immediate CPU/memory consumers. -->
         <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100" id="top-procs">
           <div class="text-sm font-medium text-slate-500 mb-3 flex items-center gap-1.5"><i data-lucide="terminal" class="w-4 h-4"></i> Top Processes</div>
           <div class="overflow-auto">
@@ -308,7 +316,7 @@
           </div>
         </div>
 
-        <!-- Mounts -->
+        <!-- Filesystem table helps diagnose which mount is responsible for disk pressure. -->
         <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100 lg:col-span-2" id="mounts-list">
           <div class="text-sm font-medium text-slate-500 mb-3 flex items-center gap-1.5"><i data-lucide="folder" class="w-4 h-4"></i> Filesystems</div>
           <div class="overflow-auto">
@@ -330,7 +338,7 @@
 
   </main>
 
-  <!-- Action Modal (aliased as action-modal for compatibility) -->
+  <!-- Shared output modal used by app.js for restart/log inspection actions. -->
   <div class="hidden fixed inset-0 z-50" id="log-modal" data-alias="action-modal">
     <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" data-close="modal"></div>
     <div class="relative max-w-3xl mx-auto mt-10 bg-white rounded-2xl shadow-xl border border-slate-200 flex flex-col max-h-[calc(100vh-80px)]" style="width:min(980px,calc(100vw - 32px))">
@@ -343,12 +351,14 @@
   </div>
   <!-- action-modal grep anchor -->
 
+  <!-- app.js owns data fetching, SSE reconnects, DOM binding, and chart rendering. -->
   <script src="/app.js"></script>
 
   <script>
-  // Initialize lucide icons
+  // Initialize Lucide after the full DOM exists so icons render in one pass.
   if (typeof lucide !== 'undefined') lucide.createIcons();
-  // Initialize language
+
+  // Restore the user's language preference from localStorage.
   (function() {
     const lang = getCurrentLang();
     const toggle = document.getElementById('lang-toggle');

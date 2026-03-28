@@ -8,6 +8,8 @@
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
   <script>
+  // Page-local i18n used by the management console. localStorage is shared with
+  // the main dashboard so language changes stay consistent across both pages.
   const LANG = {
     en: {
       'weixin.title': 'OpenClaw Management',
@@ -69,6 +71,8 @@
   function getCurrentLang() { return localStorage.getItem('vm-monitor-lang') || 'en'; }
   function setLang(lang) { localStorage.setItem('vm-monitor-lang', lang); applyLang(lang); }
   function t(key) { const lang = getCurrentLang(); return LANG[lang]?.[key] || LANG['en']?.[key] || key; }
+
+  // data-i18n keeps templates simple while still allowing runtime language swap.
   function applyLang(lang) {
     document.querySelectorAll('[data-i18n]').forEach(el => {
       const key = el.getAttribute('data-i18n');
@@ -81,7 +85,7 @@
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans min-h-screen">
 
-  <!-- Sticky Nav -->
+  <!-- Nav shared with the dashboard: back link, manual refresh, language, SSE state. -->
   <nav class="sticky top-0 z-20 bg-white/90 backdrop-blur shadow-sm border-b border-slate-200">
     <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center gap-3">
@@ -105,7 +109,7 @@
 
   <main class="max-w-5xl mx-auto px-4 py-6 space-y-6">
 
-    <!-- Gateway Section -->
+    <!-- Gateway status card: service state plus metadata parsed from openclaw status --all. -->
     <section class="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
       <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div class="flex items-center gap-3">
@@ -140,7 +144,7 @@
         </div>
         <div class="bg-slate-50 rounded-lg p-2.5">
           <div class="text-xs text-slate-400" data-i18n="label.dashboard">Dashboard</div>
-          <div class="text-sm font-semibold text-slate-700 truncate" id="oc-dashboard">--</div>
+          <div class="text-sm font-semibold text-slate-700" id="oc-dashboard">--</div>
         </div>
         <div class="bg-slate-50 rounded-lg p-2.5 overflow-hidden">
           <div class="text-xs text-slate-400" data-i18n="label.tailscale">Tailscale</div>
@@ -149,7 +153,7 @@
       </div>
     </section>
 
-    <!-- WeChat Section (accounts + connected users merged) -->
+    <!-- Weixin channel card: account state plus the peer list operators actually care about. -->
     <section class="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
       <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div class="flex items-center gap-3">
@@ -166,16 +170,16 @@
         </div>
       </div>
 
-      <!-- Bot Accounts (hidden, data used internally) -->
+      <!-- Hidden account bucket keeps raw account state around for rendering/debugging. -->
       <div id="weixin-accounts" class="hidden"></div>
 
-      <!-- Connected Users (peers) with status -->
+      <!-- Peer list merges connected-user ids with friendly aliases saved server-side. -->
       <div id="peers-list" class="space-y-2">
         <p class="text-sm text-slate-400">Loading...</p>
       </div>
     </section>
 
-    <!-- QR Code Section -->
+    <!-- QR linking section: generate code, render canvas, then poll status until confirmed/expired. -->
     <section class="bg-white rounded-xl shadow-sm border border-slate-100 p-5">
       <div class="flex items-center gap-3 mb-4">
         <div class="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center"><i data-lucide="qr-code" class="w-5 h-5 text-amber-600"></i></div>
@@ -190,6 +194,7 @@
       <div id="qr-area" class="hidden mt-4">
         <div class="max-w-[280px] mx-auto bg-white border border-slate-200 rounded-2xl p-4 relative">
           <canvas id="qr-canvas" class="w-full h-auto rounded-xl"></canvas>
+          <!-- Overlay appears only when the QR is expired or polling failed badly. -->
           <div id="qr-overlay" class="absolute inset-0 bg-slate-900/60 rounded-2xl hidden items-center justify-center flex-col gap-3 text-white">
             <span class="text-sm" data-i18n="weixin.qr.expired">QR code expired</span>
             <button id="qr-refresh-btn" class="text-sm bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition" data-i18n="weixin.qr.refresh">Click to refresh</button>
@@ -201,7 +206,7 @@
 
   </main>
 
-  <!-- Action Modal -->
+  <!-- Modal reused for restart output and log views. -->
   <div class="hidden fixed inset-0 z-50" id="action-modal">
     <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" data-close="modal"></div>
     <div class="relative max-w-3xl mx-auto mt-10 bg-white rounded-2xl shadow-xl border border-slate-200 flex flex-col max-h-[calc(100vh-80px)]" style="width:min(980px,calc(100vw - 32px))">
@@ -218,7 +223,9 @@
     const $ = (id) => document.getElementById(id);
     let pendingConfirm = null;
 
-    // --- SSE ---
+    // --- SSE binding ---
+    // The page listens to the same /api/stream feed as the dashboard and only
+    // pulls out the OpenClaw-related fields it needs.
     let weixinOnline = false;
     const evtSource = new EventSource('/api/stream');
     evtSource.onopen = () => { $('stream-status').textContent = 'Live'; $('stream-status').className = 'px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 border border-green-200'; };
@@ -232,7 +239,7 @@
     };
     evtSource.onerror = () => { $('stream-status').textContent = 'Reconnecting…'; $('stream-status').className = 'px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200'; };
 
-    // --- Gateway ---
+    // --- Gateway card binding ---
     function updateGatewayStatus(oc) {
       const gw = oc.gateway || {};
       const badge = $('gateway-badge');
@@ -252,7 +259,7 @@
       var _ts = oc.tailscale || '--'; $('oc-tailscale').textContent = _ts; $('oc-tailscale').title = _ts;
     }
 
-    // --- Weixin ---
+    // --- Weixin channel binding ---
     function updateWeixinStatus(wx) {
       weixinOnline = (wx.state === 'OK' && wx.enabled !== false);
       const badge = $('weixin-badge');
@@ -263,6 +270,7 @@
       renderAccounts(wx.accounts || []);
     }
 
+    // Account chips are mostly diagnostic; the peer list below is the operator-facing view.
     function renderAccounts(accounts) {
       const el = $('weixin-accounts');
       if (!accounts.length) { el.innerHTML = '<div class="text-sm text-slate-400">暂无账号</div>'; return; }
@@ -281,7 +289,8 @@
       `}).join('');
     }
 
-    // --- Fetch initial data ---
+    // --- Initial page hydration ---
+    // Fetching both endpoints lets the page paint quickly even before the first SSE event arrives.
     fetch('/api/latest').then(r => r.json()).then(data => {
       const oc = data.openclaw;
       if (oc) updateGatewayStatus(oc);
@@ -292,7 +301,7 @@
       if (data.state) updateWeixinStatus(data);
     }).catch(() => {});
 
-    // --- Refresh ---
+    // --- Manual refresh ---
     async function refreshAll() {
       try {
         const [latestRes, statusRes, peersRes] = await Promise.all([
@@ -307,11 +316,14 @@
         if (oc) updateGatewayStatus(oc);
         if (status.accounts) renderAccounts(status.accounts);
         if (status.state) updateWeixinStatus(status);
-        loadPeers(); // refresh peers list
+        loadPeers(); // Re-render aliases and online badges after refresh
       } catch(e) { console.error('refresh failed', e); }
     }
 
-    // --- Actions ---
+    // Expose refresh for the button in the nav.
+    window.refreshAll = refreshAll;
+
+    // --- Actions (restart / logs) ---
     function showModal(title, content) {
       $('modal-title').textContent = title;
       $('modal-output').textContent = content;
@@ -321,6 +333,7 @@
     $('modal-close').addEventListener('click', () => $('action-modal').classList.add('hidden'));
     $('action-modal').addEventListener('click', (e) => { if (e.target.dataset.close === 'modal') $('action-modal').classList.add('hidden'); });
 
+    // Restarts use a short two-click confirm because they can interrupt active sessions.
     document.querySelectorAll('.action-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
         const action = btn.dataset.action;
@@ -349,7 +362,8 @@
       });
     });
 
-    // --- QR Code ---
+    // --- QR code flow ---
+    // Generate: open API session -> draw QR to canvas with qrcode.js -> poll status.
     const qrBtn = $('qr-generate-btn');
     const qrArea = $('qr-area');
     const qrCanvas = $('qr-canvas');
@@ -384,6 +398,7 @@
       }
     }
 
+    // Poll every 3s until confirmed or expired; session id guards against stale responses.
     async function pollQr() {
       if (!currentSession || pollAbort) return;
       const session = currentSession;
@@ -406,7 +421,9 @@
     qrBtn.addEventListener('click', startQr);
     if (qrRefreshBtn) qrRefreshBtn.addEventListener('click', startQr);
 
-    // --- Peers ---
+    // --- Peer alias system ---
+    // Peers come from server-side context token files; aliases are saved separately
+    // so friendly labels survive reconnects and account restarts.
     async function loadPeers() {
       try {
         const res = await fetch('/api/weixin/peers');
@@ -445,6 +462,7 @@
       }
     }
 
+    // Save-or-clear uses the same endpoint; blank alias deletes the friendly name.
     window.saveAlias = async function(btn) {
       const input = btn.previousElementSibling;
       const peerId = input.dataset.peerId;
@@ -468,10 +486,10 @@
 
     loadPeers();
 
-    // Init icons
+    // Icon pass runs once after the DOM is ready.
     if (typeof lucide !== 'undefined') lucide.createIcons();
 
-    // Init language
+    // Restore saved language preference.
     const lang = getCurrentLang();
     const toggle = document.getElementById('lang-toggle');
     if (toggle) { toggle.value = lang; toggle.addEventListener('change', (e) => setLang(e.target.value)); }

@@ -1,3 +1,14 @@
+/**
+ * VM Monitor Dashboard — Backend Server
+ *
+ * A lightweight Node.js HTTP server that collects system metrics from Linux
+ * /proc files, manages OpenClaw gateway status, and serves a real-time
+ * monitoring dashboard via SSE (Server-Sent Events).
+ *
+ * Port: 3000 (127.0.0.1 only; Caddy reverse-proxies it in production)
+ * Dependencies: all built-in Node.js modules — no npm required
+ * Data: metrics stored as JSONL files in ./data/, 7-day rolling retention
+ */
 const http = require('http');
 const fs = require('fs');
 const fsp = require('fs/promises');
@@ -9,14 +20,17 @@ const { execFile } = require('child_process');
 const { promisify } = require('util');
 
 const execFileAsync = promisify(execFile);
+
+// ─── Configuration Constants ──────────────────────────────────────────────
 const PORT = Number(process.env.PORT || 3000);
-const HOST = '127.0.0.1';
-const SAMPLE_INTERVAL_MS = Number(process.env.SAMPLE_INTERVAL_MS || 10000);
-const OPENCLAW_STATUS_INTERVAL_MS = Number(process.env.OPENCLAW_STATUS_INTERVAL_MS || 60000);
-const SERVICE_CHECK_INTERVAL_MS = 30000;
-const RETENTION_DAYS = 7;
-const SSE_INTERVAL_MS = 10000;
+const HOST = '127.0.0.1'; // Bind to loopback only; Caddy handles public TLS
+const SAMPLE_INTERVAL_MS = Number(process.env.SAMPLE_INTERVAL_MS || 10000); // /proc polling frequency
+const OPENCLAW_STATUS_INTERVAL_MS = Number(process.env.OPENCLAW_STATUS_INTERVAL_MS || 60000); // openclaw status --all is expensive; poll less often
+const SERVICE_CHECK_INTERVAL_MS = 30000; // systemctl is-active checks
+const RETENTION_DAYS = 7; // Auto-prune JSONL files older than this
+const SSE_INTERVAL_MS = 10000; // Redundant SSE broadcast period (ensure clients stay current)
 const MONTHLY_TRAFFIC_FILE = 'monthly-traffic.json';
+// ─── External Binary Paths ────────────────────────────────────────────────
 const OPENCLAW_BIN = '/home/xtrao/.nvm/versions/node/v22.22.1/bin/openclaw';
 const SYSTEMCTL_BIN = '/usr/bin/systemctl';
 const JOURNALCTL_BIN = '/usr/bin/journalctl';
@@ -36,17 +50,21 @@ const MIME = {
   '.png': 'image/png',
 };
 
-let lastCpuSample = null;
-let lastNetworkSample = null;
-let latestSample = null;
+// ─── Runtime State ───────────────────────────────────────────────────────
+let lastCpuSample = null; // Previous /proc/stat snapshot for CPU delta
+let lastNetworkSample = null; // Previous /proc/net/dev snapshot for rate calculation
+let latestSample = null; // Most recent complete metrics sample
+// Rolling buffers — 18 samples × 10 s = 3-minute window for alert averaging
 const cpuHistory = [];
-const memHistory = []; // Rolling buffer for 30s CPU avg (3 samples at 10s interval)
-const CPU_HISTORY_SIZE = 18; // 3 minutes at 10s interval
+const memHistory = [];
+const CPU_HISTORY_SIZE = 18; // 3 minutes at 10 s interval
 let latestOpenClawStatus = null;
 let latestServiceHealth = [];
 let detectedGatewayServiceName = 'openclaw-gateway';
 let monthlyTrafficState = null;
-const sseClients = new Set();
+const sseClients = new Set(); // One entry per connected browser tab
+
+// QR sessions are ephemeral WeChat login flows; TTL prevents stale sessions accumulating
 const qrSessions = new Map();
 const QR_SESSION_TTL_MS = 5 * 60 * 1000;
 const QR_MAX_SESSIONS = 10;
@@ -74,6 +92,7 @@ function dataFileFor(ts) {
   return path.join(DATA_DIR, `metrics-${utcDateStamp(ts)}.jsonl`);
 }
 
+/** Read /proc/stat and return aggregate CPU jiffies; caller diffs two snapshots for usage %. */
 function parseProcStat() {
   const first = fs.readFileSync('/proc/stat', 'utf8').split('\n')[0].trim().split(/\s+/).slice(1).map(Number);
   const idle = first[3] + (first[4] || 0);
@@ -81,6 +100,7 @@ function parseProcStat() {
   return { idle, total };
 }
 
+/** Compute CPU usage % from two /proc/stat snapshots; returns null on first call (no prev). */
 function computeCpuUsage(now, prev) {
   if (!prev) return null;
   const idleDelta = now.idle - prev.idle;
@@ -89,6 +109,10 @@ function computeCpuUsage(now, prev) {
   return Math.max(0, Math.min(100, (1 - idleDelta / totalDelta) * 100));
 }
 
+/**
+ * Parse /proc/meminfo. Uses MemAvailable (kernel 3.14+) which accounts for
+ * reclaimable caches — more accurate than MemTotal - MemFree for real pressure.
+ */
 function parseMemInfo() {
   const text = fs.readFileSync('/proc/meminfo', 'utf8');
   const map = {};
@@ -107,6 +131,7 @@ function parseMemInfo() {
   };
 }
 
+/** Parse /proc/net/dev cumulative byte counters across all non-loopback interfaces. */
 function parseNetDev() {
   const lines = fs.readFileSync('/proc/net/dev', 'utf8').trim().split('\n').slice(2);
   let rxBytes = 0;
@@ -115,14 +140,19 @@ function parseNetDev() {
     const [ifaceRaw, statsRaw] = line.split(':');
     if (!ifaceRaw || !statsRaw) continue;
     const iface = ifaceRaw.trim();
-    if (iface === 'lo') continue;
+    if (iface === 'lo') continue; // Skip loopback
     const stats = statsRaw.trim().split(/\s+/).map(Number);
-    rxBytes += stats[0] || 0;
-    txBytes += stats[8] || 0;
+    rxBytes += stats[0] || 0; // Column 0: receive bytes
+    txBytes += stats[8] || 0; // Column 8: transmit bytes
   }
   return { rxBytes, txBytes };
 }
 
+/**
+ * Parse /proc/net/tcp or /proc/net/tcp6.
+ * Format: local_address is hex IP:hex_port; state 01 = ESTABLISHED.
+ * We only count ESTABLISHED connections and group totals by local port.
+ */
 function parseTcpTable(filePath) {
   try {
     const lines = fs.readFileSync(filePath, 'utf8').trim().split('\n').slice(1);
@@ -132,7 +162,7 @@ function parseTcpTable(filePath) {
       const cols = line.trim().split(/\s+/);
       const localAddress = cols[1];
       const state = cols[3];
-      if (!localAddress || state !== '01') continue;
+      if (!localAddress || state !== '01') continue; // 01 = ESTABLISHED
       const hexPort = localAddress.split(':')[1];
       const port = Number.parseInt(hexPort, 16);
       if (!Number.isFinite(port)) continue;
@@ -236,6 +266,11 @@ async function detectGatewayServiceName() {
   return detectedGatewayServiceName;
 }
 
+/**
+ * Run `openclaw status --all` and parse its bordered table output with regex.
+ * Runs under `nice -n 10` because on 2 vCPU VMs this command can starve the
+ * main event loop if it competes for CPU at full priority.
+ */
 async function getOpenClawStatus() {
   try {
     const { stdout } = await execFileAsync('/usr/bin/nice', ['-n', '10', OPENCLAW_BIN, 'status', '--all'], { timeout: 30000 });
@@ -360,6 +395,11 @@ const MONITORED_SERVICES = [
   { name: 'Xray', unit: 'xray', label: 'xray', userService: false },
 ];
 
+/**
+ * Check active state of each monitored service via systemctl.
+ * OpenClaw Gateway uses --user because it runs as a user-level systemd
+ * service; omitting --user makes systemctl look in the wrong scope.
+ */
 async function checkServiceHealth() {
   const results = [];
   for (const svc of MONITORED_SERVICES) {
@@ -377,11 +417,17 @@ async function checkServiceHealth() {
   return results;
 }
 
+/**
+ * Build alert list from a metrics sample.
+ * CPU/memory use a 3-minute rolling average to avoid false alarms from
+ * transient spikes.  Thresholds: CPU ≥ 85% critical, memory ≥ 85% critical,
+ * disk ≥ 90% critical.
+ */
 function buildAlerts(sample) {
   const alerts = [];
   if (!sample) return alerts;
 
-  // CPU alert: use 3-min rolling average
+  // CPU: rolling average smooths one-off spikes from short batch jobs
   const cpuAvg = cpuHistory.length > 0 ? cpuHistory.reduce((a, b) => a + b, 0) / cpuHistory.length : (sample.cpu?.usagePercent || 0);
   if (cpuAvg >= 85) {
     alerts.push({ level: 'critical', message: `3-min avg ${cpuAvg.toFixed(1)}%` , category: 'System - CPU' });
@@ -389,7 +435,7 @@ function buildAlerts(sample) {
     alerts.push({ level: 'healthy', message: `3-min avg ${cpuAvg.toFixed(1)}%`, category: 'System - CPU' });
   }
 
-  // Memory alert: use 3-min rolling average
+  // Memory: same approach — transient page cache churn shouldn't page anyone
   const memAvg = memHistory.length > 0 ? memHistory.reduce((a, b) => a + b, 0) / memHistory.length : (sample.memory?.usagePercent || 0);
   if (memAvg >= 85) {
     alerts.push({ level: 'critical', message: `3-min avg ${memAvg.toFixed(1)}%`, category: 'System - Memory' });
@@ -425,6 +471,11 @@ function buildAlerts(sample) {
   return alerts;
 }
 
+/**
+ * Main metrics collection pipeline — called every SAMPLE_INTERVAL_MS.
+ * Reads /proc files synchronously (fast), runs async I/O in parallel,
+ * maintains rolling history buffers, writes JSONL, and broadcasts SSE.
+ */
 async function collectSample() {
   const timestamp = Date.now();
   const cpuNow = parseProcStat();
@@ -645,12 +696,17 @@ function sendSseEvent(res, data) {
   res.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
+/**
+ * Register a new SSE client.  Sends headers, an immediate comment frame
+ * (for proxy compatibility), the latest sample, then 15-second keepalive
+ * comments so reverse-proxy idle-timeouts don't close the connection.
+ */
 function registerSseClient(req, res) {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream; charset=utf-8',
     'Cache-Control': 'no-store',
     Connection: 'keep-alive',
-    'X-Accel-Buffering': 'no',
+    'X-Accel-Buffering': 'no', // Prevent nginx/Caddy from buffering SSE frames
   });
   res.write(': connected\n\n');
   if (latestSample) sendSseEvent(res, latestSample);
@@ -715,6 +771,10 @@ function normalizeAccountId(raw) {
   return raw.trim().toLowerCase().replace(/@.*$/, '').replace(/[^a-z0-9-]/g, '-');
 }
 
+/**
+ * Persist WeChat bot credentials to ~/.openclaw/openclaw-weixin/accounts/<id>.json.
+ * chmod 0600 restricts access to owner only — the file contains a live bot token.
+ */
 async function saveWeixinAccount(accountId, { token, baseUrl, userId }) {
   await fsp.mkdir(WEIXIN_ACCOUNTS_DIR, { recursive: true });
   const filePath = path.join(WEIXIN_ACCOUNTS_DIR, `${accountId}.json`);
@@ -724,9 +784,15 @@ async function saveWeixinAccount(accountId, { token, baseUrl, userId }) {
     ...(userId ? { userId } : {}),
   };
   await fsp.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
-  await fsp.chmod(filePath, 0o600).catch(() => {});
+  await fsp.chmod(filePath, 0o600).catch(() => {}); // Restrict to owner — contains bot token
 }
 
+/**
+ * Trigger the weixin channel to reload newly-saved account files.
+ * Strategy: prefer a lightweight `openclaw config set` which nudges the
+ * channel without a full restart.  Falls back to `openclaw gateway restart`
+ * if the config path fails.
+ */
 async function triggerOpenClawReload() {
   const configResult = await runCommand(OPENCLAW_BIN, [
     'config', 'set', 'channels.openclaw-weixin.accounts', '{}', '--strict-json'
@@ -753,6 +819,7 @@ function cleanupQrSessions() {
   }
 }
 
+/** POST /api/weixin/qr/start — generate a new WeChat login QR code session. */
 async function handleWeixinQrStart(_req, res) {
   cleanupQrSessions();
 
@@ -781,6 +848,11 @@ async function handleWeixinQrStart(_req, res) {
   }
 }
 
+/**
+ * GET /api/weixin/qr/status?session=<id> — poll QR scan state.
+ * On 'confirmed': saves credentials, triggers channel reload, removes session.
+ * On 'expired': removes session so the client can generate a new one.
+ */
 async function handleWeixinQrStatus(res, searchParams) {
   cleanupQrSessions();
   const sessionId = searchParams.get('session');
@@ -870,6 +942,13 @@ async function getCombinedWeixinStatus() {
   };
 }
 
+/**
+ * Map action name to the underlying command.
+ *   openclaw-restart — systemctl restart (full service restart)
+ *   openclaw-logs    — last 100 lines from journalctl
+ *   weixin-restart   — openclaw gateway restart (reloads channels only)
+ *   weixin-logs      — grep today's log file for weixin entries
+ */
 async function runOpenClawAction(kind) {
   if (kind === 'openclaw-restart') {
     return runCommand(SYSTEMCTL_BIN, ['restart', detectedGatewayServiceName], { timeout: 30000 });
@@ -886,6 +965,7 @@ async function runOpenClawAction(kind) {
   return { ok: false, stderr: 'Unknown action', code: null };
 }
 
+/** Handle POST /api/actions/<action> — requires { confirm: true } in the body. */
 async function handleAction(req, res, pathname) {
   await requireConfirm(req);
   const action = pathname.replace('/api/actions/', '');
@@ -1000,16 +1080,24 @@ async function handleApi(req, res, pathname, searchParams) {
   return sendJson(res, 404, { error: 'Not found' });
 }
 
+/**
+ * Application bootstrap.
+ *
+ * The HTTP server starts BEFORE data collection so the page is reachable
+ * immediately — the initial `openclaw status --all` can take 10-30 s on cold
+ * start and would otherwise block the port from binding.  All slow operations
+ * are fire-and-forget.
+ */
 async function bootstrap() {
   await ensureDataDir();
   await loadMonthlyTrafficState();
 
-  // Start server FIRST, then do slow data collection in background
+  // Server first: clients see a loading state instead of a connection error
   server.listen(PORT, HOST, () => {
     console.log(`VM monitor dashboard running on http://${HOST}:${PORT}`);
   });
 
-  // Slow operations run in background — don't block server startup
+  // Background init: gateway detection, openclaw status, first sample, service health
   detectGatewayServiceName().catch(() => {});
   refreshOpenClawStatus().catch((err) => console.error('initial openclaw status error', err));
   collectSample().catch((err) => console.error('initial sample error', err));
