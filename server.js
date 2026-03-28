@@ -6,6 +6,7 @@ const os = require('os');
 const { URL } = require('url');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
+const crypto = require('crypto');
 
 const execFileAsync = promisify(execFile);
 const PORT = Number(process.env.PORT || 3000);
@@ -20,6 +21,13 @@ const OPENCLAW_EXEC_TIMEOUT_MS = 30000;
 const SYSTEMCTL_BIN = '/usr/bin/systemctl';
 const JOURNALCTL_BIN = '/usr/bin/journalctl';
 const BASH_BIN = '/bin/bash';
+const WEIXIN_QR_TTL_MS = 5 * 60 * 1000;
+const QR_RATE_LIMIT = {
+  maxAttempts: 5,
+  windowMs: 5 * 60 * 1000,
+  blockMs: 60 * 1000,
+  cleanupIntervalMs: 10 * 60 * 1000,
+};
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const DATA_DIR = path.join(ROOT, 'data');
@@ -40,6 +48,8 @@ let latestOpenClawStatus = null;
 let detectedGatewayServiceName = 'openclaw-gateway';
 let monthlyTrafficState = null;
 const sseClients = new Set();
+const weixinQrSessions = new Map();
+const qrAttempts = new Map();
 
 async function ensureDataDir() {
   await fsp.mkdir(DATA_DIR, { recursive: true });
@@ -51,6 +61,68 @@ function utcDateStamp(ts = Date.now()) {
 
 function currentMonthStamp(ts = Date.now()) {
   return new Date(ts).toISOString().slice(0, 7);
+}
+
+function getClientIp(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.trim()) {
+    return forwarded.split(',')[0].trim();
+  }
+  return req.socket.remoteAddress || 'unknown';
+}
+
+function isPasswordValid(input) {
+  const expected = '1874';
+  if (typeof input !== 'string') return false;
+  if (Buffer.byteLength(input) !== Buffer.byteLength(expected)) return false;
+  return crypto.timingSafeEqual(Buffer.from(input), Buffer.from(expected));
+}
+
+function checkQrRateLimit(ip) {
+  const now = Date.now();
+  const entry = qrAttempts.get(ip);
+  if (!entry) return { allowed: true };
+  if (entry.blockedUntil && now < entry.blockedUntil) {
+    return {
+      allowed: false,
+      retryAfter: Math.ceil((entry.blockedUntil - now) / 1000),
+    };
+  }
+  if (now - entry.firstAttempt > QR_RATE_LIMIT.windowMs) {
+    qrAttempts.delete(ip);
+    return { allowed: true };
+  }
+  if (entry.count >= QR_RATE_LIMIT.maxAttempts) {
+    entry.blockedUntil = now + QR_RATE_LIMIT.blockMs;
+    return {
+      allowed: false,
+      retryAfter: Math.ceil(QR_RATE_LIMIT.blockMs / 1000),
+    };
+  }
+  return { allowed: true };
+}
+
+function recordQrFailedAttempt(ip) {
+  const now = Date.now();
+  const entry = qrAttempts.get(ip) || { count: 0, firstAttempt: now, blockedUntil: null };
+  if (now - entry.firstAttempt > QR_RATE_LIMIT.windowMs) {
+    entry.count = 0;
+    entry.firstAttempt = now;
+    entry.blockedUntil = null;
+  }
+  entry.count += 1;
+  qrAttempts.set(ip, entry);
+}
+
+function cleanupQrAttempts() {
+  const now = Date.now();
+  for (const [ip, entry] of qrAttempts.entries()) {
+    const expiredWindow = now - entry.firstAttempt > QR_RATE_LIMIT.windowMs;
+    const expiredBlock = !entry.blockedUntil || now >= entry.blockedUntil;
+    if (expiredWindow && expiredBlock) {
+      qrAttempts.delete(ip);
+    }
+  }
 }
 
 function dataFileFor(ts) {
@@ -620,6 +692,93 @@ async function runCommand(file, args, options = {}) {
   }
 }
 
+function cleanupWeixinQrSessions() {
+  const cutoff = Date.now() - WEIXIN_QR_TTL_MS;
+  for (const [sessionId, session] of weixinQrSessions.entries()) {
+    if (!session?.startedAt || session.startedAt < cutoff) {
+      weixinQrSessions.delete(sessionId);
+    }
+  }
+}
+
+function getWeixinStatusMessage(status) {
+  if (status === 'scaned') return 'Scanned! Confirm on phone...';
+  if (status === 'confirmed') return '✅ Connected!';
+  if (status === 'expired') return '⏰ Expired, try again';
+  return 'Waiting for scan...';
+}
+
+async function fetchJson(url, options = {}) {
+  const response = await fetch(url, options);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw Object.assign(new Error(data?.message || `Request failed with status ${response.status}`), { statusCode: 502 });
+  }
+  return data;
+}
+
+async function handleWeixinQrStart(req, res) {
+  const body = await readRequestBody(req);
+  const clientIp = getClientIp(req);
+  const rateCheck = checkQrRateLimit(clientIp);
+  if (!rateCheck.allowed) {
+    return sendJson(
+      res,
+      429,
+      { error: 'Too many attempts. Try again later.' },
+      { 'Retry-After': String(rateCheck.retryAfter) },
+    );
+  }
+
+  if (!isPasswordValid(body.password)) {
+    recordQrFailedAttempt(clientIp);
+    return sendJson(res, 403, { error: 'Invalid password' });
+  }
+
+  qrAttempts.delete(clientIp);
+  cleanupWeixinQrSessions();
+  const data = await fetchJson('https://ilinkai.weixin.qq.com/ilink/bot/get_bot_qrcode?bot_type=3');
+  if (!data.qrcode || !data.qrcode_img_content) {
+    return sendJson(res, 502, { error: 'Invalid response from WeChat API' });
+  }
+
+  const sessionId = crypto.randomUUID();
+  weixinQrSessions.set(sessionId, {
+    qrcode: data.qrcode,
+    qrcodeUrl: data.qrcode_img_content,
+    startedAt: Date.now(),
+  });
+
+  return sendJson(res, 200, { sessionId, qrcodeUrl: data.qrcode_img_content });
+}
+
+async function handleWeixinQrStatus(res, searchParams) {
+  cleanupWeixinQrSessions();
+  const sessionId = searchParams.get('session');
+  const session = sessionId ? weixinQrSessions.get(sessionId) : null;
+  if (!session) {
+    return sendJson(res, 404, { error: 'QR session not found or expired' });
+  }
+
+  const encodedQr = encodeURIComponent(session.qrcode);
+  const data = await fetchJson(`https://ilinkai.weixin.qq.com/ilink/bot/get_qrcode_status?qrcode=${encodedQr}`, {
+    headers: {
+      'iLink-App-ClientVersion': '1',
+    },
+  });
+
+  if (data.status === 'confirmed' || data.status === 'expired') {
+    weixinQrSessions.delete(sessionId);
+    refreshOpenClawStatus().catch(() => {});
+  }
+
+  return sendJson(res, 200, {
+    status: data.status || 'wait',
+    accountId: data.ilink_bot_id || data.ilink_user_id || null,
+    message: getWeixinStatusMessage(data.status || 'wait'),
+  });
+}
+
 async function runOpenClawAction(kind) {
   if (kind === 'openclaw-restart') {
     return runCommand(SYSTEMCTL_BIN, ['restart', detectedGatewayServiceName], { timeout: 30000 });
@@ -673,6 +832,20 @@ async function handleApi(req, res, pathname, searchParams) {
     return sendJson(res, 200, latestSample);
   }
 
+  if (pathname === '/api/weixin/status') {
+    return sendJson(res, 200, latestOpenClawStatus?.weixin || { enabled: false, state: 'UNKNOWN' });
+  }
+
+  if (pathname === '/api/weixin/qr/start') {
+    if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method not allowed' }, { Allow: 'POST' });
+    return handleWeixinQrStart(req, res);
+  }
+
+  if (pathname === '/api/weixin/qr/status') {
+    if (req.method !== 'GET') return sendJson(res, 405, { error: 'Method not allowed' }, { Allow: 'GET' });
+    return handleWeixinQrStatus(res, searchParams);
+  }
+
   if (pathname === '/api/metrics') {
     const hours = Number(searchParams.get('hours') || '24');
     const clampedHours = Math.max(1 / 6, Math.min(24 * 7, hours));
@@ -706,6 +879,14 @@ async function bootstrap() {
   setInterval(() => {
     if (latestSample) broadcastSse(latestSample);
   }, SSE_INTERVAL_MS).unref();
+
+  setInterval(() => {
+    cleanupWeixinQrSessions();
+  }, 60000).unref();
+
+  setInterval(() => {
+    cleanupQrAttempts();
+  }, QR_RATE_LIMIT.cleanupIntervalMs).unref();
 }
 
 const server = http.createServer(async (req, res) => {
@@ -713,6 +894,9 @@ const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     if (url.pathname.startsWith('/api/')) {
       return await handleApi(req, res, url.pathname, url.searchParams);
+    }
+    if (url.pathname === '/weixin' || url.pathname === '/weixin/') {
+      return await serveStatic(res, '/weixin.html');
     }
     return await serveStatic(res, url.pathname);
   } catch (err) {
