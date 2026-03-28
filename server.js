@@ -947,8 +947,7 @@ async function handleApi(req, res, pathname, searchParams) {
   }
 
   if (pathname === '/api/latest') {
-    if (!latestSample) await collectSample();
-    return sendJson(res, 200, latestSample);
+    return sendJson(res, 200, latestSample || { timestamp: Date.now(), isoTime: new Date().toISOString() });
   }
 
   if (pathname === '/api/weixin/status') {
