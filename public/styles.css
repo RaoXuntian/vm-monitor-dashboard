@@ -6,6 +6,7 @@
   position: relative;
   width: 100%;
   overflow: hidden;
+  border-radius: 0 0 0.75rem 0.75rem;
 }
 .chart-wrap.tall {
   height: 270px;
