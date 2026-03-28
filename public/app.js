@@ -126,11 +126,9 @@ function render() {
     { key: 'memoryUsagePercent', color: '#c28cff', gradientId: 'memoryGradient', fillFrom: 'rgba(194,140,255,0.38)', fillTo: 'rgba(194,140,255,0.02)', label: 'Memory' },
   ], { yMin: 0, yMax: 100, ySuffix: '%' });
 
-  const allNetRates = series.flatMap((point) => [point.networkRxRateBps || 0, point.networkTxRateBps || 0]).filter((v) => v > 0);
-  const dataMax = allNetRates.length > 0 ? Math.max(...allNetRates) : 1;
-  // Round up to a clean number with 20% headroom
-  const magnitude = Math.pow(10, Math.floor(Math.log10(Math.max(1, dataMax))));
-  const networkMax = Math.ceil(dataMax * 1.2 / magnitude) * magnitude;
+  const allNetRates = series.flatMap((point) => [point.networkRxRateBps || 0, point.networkTxRateBps || 0]).filter((v) => v > 0).sort((a, b) => a - b);
+  const p95 = allNetRates.length > 0 ? allNetRates[Math.floor(allNetRates.length * 0.95)] : 1;
+  const networkMax = Math.max(1, p95 * 1.2);
   renderLineChart('chart-network', series, [
     { key: 'networkRxRateBps', color: '#63e2c6', gradientId: 'rxGradient', fillFrom: 'rgba(99,226,198,0.36)', fillTo: 'rgba(99,226,198,0.02)', label: 'Inbound' },
     { key: 'networkTxRateBps', color: '#f6c760', gradientId: 'txGradient', fillFrom: 'rgba(246,199,96,0.26)', fillTo: 'rgba(246,199,96,0.02)', label: 'Outbound' },
