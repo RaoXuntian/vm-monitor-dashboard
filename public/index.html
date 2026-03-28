@@ -6,7 +6,6 @@
   <title>Azure VM Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans min-h-screen">
@@ -47,7 +46,7 @@
       </h2>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <!-- WeChat Agent -->
-        <a href="#weixin-section" class="bg-white rounded-xl p-5 shadow-sm border border-slate-100 hover:shadow-md transition group">
+        <a href="/weixin" class="bg-white rounded-xl p-5 shadow-sm border border-slate-100 hover:shadow-md transition group">
           <div class="flex items-center gap-3 mb-2">
             <div class="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center"><i data-lucide="message-circle" class="w-5 h-5 text-green-600"></i></div>
             <div>
@@ -58,7 +57,7 @@
           <p class="text-sm text-slate-500">管理微信账号连接、二维码登录及消息状态。</p>
         </a>
         <!-- OpenClaw Gateway -->
-        <a href="#service-section" class="bg-white rounded-xl p-5 shadow-sm border border-slate-100 hover:shadow-md transition group">
+        <a href="/weixin" class="bg-white rounded-xl p-5 shadow-sm border border-slate-100 hover:shadow-md transition group">
           <div class="flex items-center gap-3 mb-2">
             <div class="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center"><i data-lucide="cpu" class="w-5 h-5 text-indigo-600"></i></div>
             <div>
@@ -212,78 +211,6 @@
       </div>
     </section>
 
-    <!-- Section 3: Service Status -->
-    <section id="service-section">
-      <h2 class="text-lg font-semibold text-slate-700 mb-4 flex items-center gap-2">
-        <i data-lucide="settings" class="w-5 h-5 text-indigo-500"></i>
-        服务状态
-      </h2>
-
-      <div class="bg-white rounded-xl shadow-sm border border-slate-100 divide-y divide-slate-100">
-        <!-- OpenClaw Gateway -->
-        <div class="p-5">
-          <div class="flex flex-wrap items-center justify-between gap-3">
-            <div class="min-w-0">
-              <div class="font-semibold text-slate-700">OpenClaw Gateway</div>
-              <div class="text-sm text-slate-500 mt-0.5" id="gateway-detail">--</div>
-            </div>
-            <div class="flex items-center gap-2 flex-wrap">
-              <span class="status-badge unknown px-2.5 py-1 rounded-full text-xs font-medium" id="gateway-badge">Unknown</span>
-              <button class="action-btn px-3 py-1.5 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition" data-action="openclaw-restart">Restart</button>
-              <button class="action-btn secondary px-3 py-1.5 text-sm rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition" data-action="openclaw-logs">View Logs</button>
-            </div>
-          </div>
-          <div class="grid grid-cols-3 gap-3 mt-3">
-            <div class="bg-slate-50 rounded-lg p-2.5">
-              <div class="text-xs text-slate-400">Service</div>
-              <div class="text-sm font-semibold text-slate-700" id="gateway-service-name">--</div>
-            </div>
-            <div class="bg-slate-50 rounded-lg p-2.5">
-              <div class="text-xs text-slate-400">Sessions</div>
-              <div class="text-sm font-semibold text-slate-700" id="gateway-sessions">--</div>
-            </div>
-            <div class="bg-slate-50 rounded-lg p-2.5">
-              <div class="text-xs text-slate-400">Version</div>
-              <div class="text-sm font-semibold text-slate-700" id="gateway-version">--</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Weixin Channel -->
-        <div class="p-5">
-          <div class="flex flex-wrap items-center justify-between gap-3">
-            <div class="min-w-0">
-              <div class="font-semibold text-slate-700">Weixin Channel</div>
-              <div class="text-sm text-slate-500 mt-0.5" id="weixin-detail">--</div>
-            </div>
-            <div class="flex items-center gap-2 flex-wrap">
-              <span class="status-badge unknown px-2.5 py-1 rounded-full text-xs font-medium" id="weixin-badge">Unknown</span>
-              <button class="action-btn px-3 py-1.5 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition" data-action="weixin-restart">Restart</button>
-              <button class="action-btn secondary px-3 py-1.5 text-sm rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition" data-action="weixin-logs">View Logs</button>
-            </div>
-          </div>
-          <div id="weixin-accounts" class="mt-3 space-y-2"></div>
-
-          <!-- QR Code Section -->
-          <div id="weixin-section" class="mt-4">
-            <button id="qr-generate-btn" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition text-sm font-medium">
-              🔗 生成登录二维码
-            </button>
-            <div id="qr-area" class="hidden mt-4">
-              <div class="max-w-[280px] mx-auto bg-white border border-slate-200 rounded-2xl p-4 relative">
-                <canvas id="qr-canvas" class="w-full h-auto rounded-xl"></canvas>
-                <div id="qr-overlay" class="absolute inset-0 bg-slate-900/60 rounded-2xl hidden items-center justify-center flex-col gap-3 text-white">
-                  <span class="text-sm">二维码已过期</span>
-                  <button id="qr-refresh-btn" class="text-sm bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition">点击刷新</button>
-                </div>
-              </div>
-              <p id="qr-status" class="mt-2 text-sm text-slate-600 text-center"></p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
     <!-- Section 4: System Details -->
     <section>
       <h2 class="text-lg font-semibold text-slate-700 mb-4 flex items-center gap-2">
@@ -353,81 +280,7 @@
 
   <script src="/app.js"></script>
 
-  <!-- QR Code Logic (from weixin.html) -->
   <script>
-  (function() {
-    const qrBtn = document.getElementById('qr-generate-btn');
-    const qrArea = document.getElementById('qr-area');
-    const qrCanvas = document.getElementById('qr-canvas');
-    const qrStatus = document.getElementById('qr-status');
-    const qrOverlay = document.getElementById('qr-overlay');
-    const qrRefreshBtn = document.getElementById('qr-refresh-btn');
-    let currentSession = null;
-    let pollAbort = false;
-
-    if (!qrBtn) return;
-
-    async function startQr() {
-      qrBtn.disabled = true;
-      qrBtn.textContent = '生成中…';
-      pollAbort = true;
-      currentSession = null;
-      try {
-        const res = await fetch('/api/weixin/qr/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || '生成失败');
-        currentSession = data.sessionId;
-        qrArea.classList.remove('hidden');
-        qrOverlay.classList.add('hidden');
-        qrOverlay.classList.remove('flex');
-        await QRCode.toCanvas(qrCanvas, data.qrUrl, { width: 280, margin: 2, color: { dark: '#1e293b', light: '#ffffff' } });
-        qrStatus.textContent = '等待扫码…请使用微信扫描二维码。';
-        pollAbort = false;
-        pollQr();
-      } catch (e) {
-        qrStatus.textContent = '❌ ' + e.message;
-        qrArea.classList.remove('hidden');
-      } finally {
-        qrBtn.disabled = false;
-        qrBtn.textContent = '🔗 生成登录二维码';
-      }
-    }
-
-    async function pollQr() {
-      if (!currentSession || pollAbort) return;
-      const session = currentSession;
-      try {
-        const res = await fetch('/api/weixin/qr/status?session=' + encodeURIComponent(session), { cache: 'no-store' });
-        const data = await res.json();
-        if (currentSession !== session || pollAbort) return;
-        if (data.status === 'confirmed') {
-          qrStatus.textContent = '✅ 连接成功！' + (data.message || '');
-          return;
-        }
-        if (data.status === 'expired') {
-          qrStatus.textContent = '二维码已过期';
-          qrOverlay.classList.remove('hidden');
-          qrOverlay.classList.add('flex');
-          return;
-        }
-        if (data.status === 'scaned') {
-          qrStatus.textContent = '已扫码，请在手机上确认…';
-        } else {
-          qrStatus.textContent = '等待扫码…' + (data.message || '');
-        }
-        setTimeout(pollQr, 3000);
-      } catch (e) {
-        if (currentSession !== session || pollAbort) return;
-        qrStatus.textContent = '状态查询失败: ' + e.message;
-        qrOverlay.classList.remove('hidden');
-        qrOverlay.classList.add('flex');
-      }
-    }
-
-    qrBtn.addEventListener('click', startQr);
-    if (qrRefreshBtn) qrRefreshBtn.addEventListener('click', startQr);
-  })();
-
   // Initialize lucide icons
   if (typeof lucide !== 'undefined') lucide.createIcons();
   </script>

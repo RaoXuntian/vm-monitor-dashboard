@@ -173,10 +173,11 @@ function badgeClassForWeixin(services) {
 }
 
 function renderServices(services) {
-  const gatewayClass = badgeClassForGateway(services);
-  const weixinClass = badgeClassForWeixin(services);
   const gatewayBadge = $('gateway-badge');
   const weixinBadge = $('weixin-badge');
+  if (!gatewayBadge || !weixinBadge) return;
+  const gatewayClass = badgeClassForGateway(services);
+  const weixinClass = badgeClassForWeixin(services);
   gatewayBadge.className = `status-badge ${gatewayClass}`;
   gatewayBadge.textContent = services?.gateway?.running ? 'Running' : 'Offline';
   weixinBadge.className = `status-badge ${weixinClass}`;
