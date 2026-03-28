@@ -126,9 +126,19 @@ function render() {
     { key: 'memoryUsagePercent', color: '#c28cff', gradientId: 'memoryGradient', fillFrom: 'rgba(194,140,255,0.38)', fillTo: 'rgba(194,140,255,0.02)', label: 'Memory' },
   ], { yMin: 0, yMax: 100, ySuffix: '%' });
 
-  const allNetRates = series.flatMap((point) => [point.networkRxRateBps || 0, point.networkTxRateBps || 0]);
-  const dataMax = Math.max(1, ...allNetRates);
-  const networkMax = dataMax * 1.2; // 20% headroom above actual max for visual breathing room
+  const allNetRates = series.flatMap((point) => [point.networkRxRateBps || 0, point.networkTxRateBps || 0]).filter((v) => v > 0).sort((a, b) => a - b);
+  let networkMax;
+  if (allNetRates.length < 4) {
+    networkMax = Math.max(1, ...allNetRates) * 1.3;
+  } else {
+    const q1 = allNetRates[Math.floor(allNetRates.length * 0.25)];
+    const q3 = allNetRates[Math.floor(allNetRates.length * 0.75)];
+    const iqr = q3 - q1;
+    const upperFence = q3 + iqr * 2.5;
+    const filtered = allNetRates.filter((v) => v <= upperFence);
+    const cleanMax = filtered.length > 0 ? filtered[filtered.length - 1] : allNetRates[allNetRates.length - 1];
+    networkMax = Math.max(1, cleanMax * 1.3);
+  }
   renderLineChart('chart-network', series, [
     { key: 'networkRxRateBps', color: '#63e2c6', gradientId: 'rxGradient', fillFrom: 'rgba(99,226,198,0.36)', fillTo: 'rgba(99,226,198,0.02)', label: 'Inbound' },
     { key: 'networkTxRateBps', color: '#f6c760', gradientId: 'txGradient', fillFrom: 'rgba(246,199,96,0.26)', fillTo: 'rgba(246,199,96,0.02)', label: 'Outbound' },
@@ -158,23 +168,31 @@ function renderAlerts(alerts, serviceHealth) {
   const el = $('alert-list');
   const rows = [];
 
-  // Capacity / gateway / weixin alerts from backend
+  // Capacity alerts from backend (CPU avg, memory, disk)
   for (const alert of alerts) {
-    if (alert.level === 'healthy') continue; // skip generic healthy, we'll add per-service below
-    rows.push(`<div class="alert-item ${alert.level}"><strong>Alert</strong><span>${escapeHtml(alert.message)}</span></div>`);
+    if (alert.level === 'healthy') {
+      rows.push(`<div class="alert-item healthy"><strong>System</strong><span>${escapeHtml(alert.message)}</span></div>`);
+    } else {
+      rows.push(`<div class="alert-item ${alert.level}"><strong>Alert</strong><span>${escapeHtml(alert.message)}</span></div>`);
+    }
   }
 
   // Per-service health rows
   if (Array.isArray(serviceHealth)) {
     for (const svc of serviceHealth) {
-      const level = svc.active ? 'healthy' : 'critical';
-      const label = svc.active ? '● Online' : '✕ DOWN';
+      let level, label;
+      if (svc.active) {
+        level = 'healthy';
+        label = '● Online';
+      } else if (svc.state === 'not-found' || svc.state === 'not-installed') {
+        level = 'info';
+        label = '○ Not Configured';
+      } else {
+        level = 'critical';
+        label = '✕ DOWN (' + (svc.state || 'inactive') + ')';
+      }
       rows.push(`<div class="alert-item ${level}"><strong>${escapeHtml(svc.name)}</strong><span>${label}</span></div>`);
     }
-  }
-
-  if (!rows.length) {
-    rows.push(`<div class="alert-item healthy"><strong>Healthy</strong><span>All systems operational</span></div>`);
   }
 
   el.innerHTML = rows.join('');

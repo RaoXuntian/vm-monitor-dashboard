@@ -37,6 +37,8 @@ const MIME = {
 let lastCpuSample = null;
 let lastNetworkSample = null;
 let latestSample = null;
+const cpuHistory = []; // Rolling buffer for 30s CPU avg (3 samples at 10s interval)
+const CPU_HISTORY_SIZE = 3;
 let latestOpenClawStatus = null;
 let detectedGatewayServiceName = 'openclaw-gateway';
 let monthlyTrafficState = null;
@@ -361,8 +363,9 @@ async function checkServiceHealth() {
       const { stdout } = await execFileAsync(SYSTEMCTL_BIN, args, { timeout: 5000 });
       results.push({ name: svc.name, unit, active: stdout.trim() === 'active' });
     } catch (err) {
-      const stdout = err.stdout || '';
-      results.push({ name: svc.name, unit, active: false, state: stdout.trim() || 'unknown' });
+      const stdout = (err.stdout || '').trim();
+      const state = stdout === 'inactive' ? 'inactive' : stdout === 'failed' ? 'failed' : (err.code === 4 || stdout === '') ? 'not-found' : (stdout || 'unknown');
+      results.push({ name: svc.name, unit, active: false, state });
     }
   }
   return results;
@@ -371,7 +374,16 @@ async function checkServiceHealth() {
 function buildAlerts(sample) {
   const alerts = [];
   if (!sample) return alerts;
-  if ((sample.cpu?.usagePercent || 0) >= 85) alerts.push({ level: 'critical', message: `CPU is high at ${sample.cpu.usagePercent.toFixed(1)}%` });
+
+  // CPU alert: use 30s rolling average instead of instantaneous value
+  const cpuAvg = cpuHistory.length > 0 ? cpuHistory.reduce((a, b) => a + b, 0) / cpuHistory.length : (sample.cpu?.usagePercent || 0);
+  const currentCpu = sample.cpu?.usagePercent ?? cpuAvg;
+  if (cpuAvg >= 85) {
+    alerts.push({ level: 'critical', message: `CPU is high — 30s avg ${cpuAvg.toFixed(1)}% (current ${currentCpu.toFixed(1)}%)` });
+  } else {
+    alerts.push({ level: 'healthy', message: `CPU normal — 30s avg ${cpuAvg.toFixed(1)}%` });
+  }
+
   if ((sample.memory?.usagePercent || 0) >= 90) alerts.push({ level: 'critical', message: `Memory is high at ${sample.memory.usagePercent.toFixed(1)}%` });
   if ((sample.disk?.usagePercent || 0) >= 90) alerts.push({ level: 'critical', message: `Disk is high at ${sample.disk.usagePercent.toFixed(1)}%` });
 
@@ -417,6 +429,10 @@ async function collectSample() {
   const uptimeSec = os.uptime();
   const cpuUsagePercent = computeCpuUsage(cpuNow, lastCpuSample);
   lastCpuSample = cpuNow;
+  if (cpuUsagePercent !== null) {
+    cpuHistory.push(cpuUsagePercent);
+    if (cpuHistory.length > CPU_HISTORY_SIZE) cpuHistory.shift();
+  }
 
   const sample = {
     timestamp,

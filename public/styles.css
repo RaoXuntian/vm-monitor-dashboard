@@ -126,6 +126,7 @@
 .alert-item.healthy { border-color: #a7f3d0; background: #ecfdf5; }
 .alert-item.warn { border-color: #fde68a; background: #fffbeb; }
 .alert-item.critical { border-color: #fecdd3; background: #fef2f2; }
+.alert-item.info { border-color: #e0e7ff; background: #eef2ff; color: #6366f1; }
 
 /* Port pills */
 .port-pill {
