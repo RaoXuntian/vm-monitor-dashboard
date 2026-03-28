@@ -21,6 +21,17 @@ const { promisify } = require('util');
 
 const execFileAsync = promisify(execFile);
 
+async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    return res;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // ─── Configuration Constants ──────────────────────────────────────────────
 const PORT = Number(process.env.PORT || 3000);
 const HOST = '127.0.0.1'; // Bind to loopback only; Caddy handles public TLS
@@ -444,7 +455,6 @@ function buildAlerts(sample) {
   }
 
   if ((sample.disk?.usagePercent || 0) >= 90) alerts.push({ level: 'critical', message: `Disk is high at ${sample.disk.usagePercent.toFixed(1)}%`, category: 'System - Disk' });
-  if ((sample.disk?.usagePercent || 0) >= 90) alerts.push({ level: 'critical', message: `Disk is high at ${sample.disk.usagePercent.toFixed(1)}%` });
 
   if (Array.isArray(sample.serviceHealth)) {
     for (const svc of sample.serviceHealth) {
@@ -828,7 +838,7 @@ async function handleWeixinQrStart(_req, res) {
   }
 
   try {
-    const qrResponse = await fetch('https://ilinkai.weixin.qq.com/ilink/bot/get_bot_qrcode?bot_type=3');
+    const qrResponse = await fetchWithTimeout('https://ilinkai.weixin.qq.com/ilink/bot/get_bot_qrcode?bot_type=3', {}, 15000);
     const qrData = await qrResponse.json();
 
     if (!qrData.qrcode || !qrData.qrcode_img_content) {
@@ -862,9 +872,10 @@ async function handleWeixinQrStatus(res, searchParams) {
   }
 
   try {
-    const statusResponse = await fetch(
+    const statusResponse = await fetchWithTimeout(
       `https://ilinkai.weixin.qq.com/ilink/bot/get_qrcode_status?qrcode=${encodeURIComponent(session.qrcode)}`,
-      { headers: { 'iLink-App-ClientVersion': '1' } }
+      { headers: { 'iLink-App-ClientVersion': '1' } },
+      35000
     );
     const statusData = await statusResponse.json();
 
@@ -932,8 +943,6 @@ async function getCombinedWeixinStatus() {
     }
   }
 
-  console.log('[DEBUG-WEIXIN] knownIds:', knownIds, 'reported:', reportedAccounts.map(a => a?.account), 'merged:', [...merged.keys()]);
-
   return {
     ...status,
     accounts: [...merged.values()]
@@ -951,10 +960,10 @@ async function getCombinedWeixinStatus() {
  */
 async function runOpenClawAction(kind) {
   if (kind === 'openclaw-restart') {
-    return runCommand(SYSTEMCTL_BIN, ['restart', detectedGatewayServiceName], { timeout: 30000 });
+    return runCommand(SYSTEMCTL_BIN, ['--user', 'restart', detectedGatewayServiceName], { timeout: 30000 });
   }
   if (kind === 'openclaw-logs') {
-    return runCommand(JOURNALCTL_BIN, ['-u', detectedGatewayServiceName, '-n', '100', '--no-pager'], { timeout: 30000 });
+    return runCommand(JOURNALCTL_BIN, ['--user', '-u', detectedGatewayServiceName, '-n', '100', '--no-pager'], { timeout: 30000 });
   }
   if (kind === 'weixin-restart') {
     return runCommand(OPENCLAW_BIN, ['gateway', 'restart'], { timeout: 30000 });

@@ -271,20 +271,27 @@
     }
 
     // Account chips are mostly diagnostic; the peer list below is the operator-facing view.
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
     function renderAccounts(accounts) {
       const el = $('weixin-accounts');
       if (!accounts.length) { el.innerHTML = '<div class="text-sm text-slate-400">暂无账号</div>'; return; }
       el.innerHTML = accounts.map(a => {
-        const displayName = a.name || a.id || a.account || '--';
-        const initial = displayName[0] || '?';
+        const displayName = escapeHtml(a.name || a.id || a.account || '--');
+        const initial = escapeHtml(displayName[0] || '?');
         const isOnline = a.status === 'online' || a.status === 'OK';
+        const safeStatus = escapeHtml(a.status || '--');
         return `
         <div class="flex items-center gap-3 bg-slate-50 rounded-lg p-3">
           <div class="w-8 h-8 rounded-full ${isOnline ? 'bg-green-100 text-green-600' : 'bg-slate-200 text-slate-500'} flex items-center justify-center text-xs font-bold">${initial}</div>
           <div class="flex-1 min-w-0">
             <div class="text-sm font-medium text-slate-700 truncate">${displayName}</div>
           </div>
-          <span class="px-2 py-0.5 rounded-full text-xs font-medium ${isOnline ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-500'}">${isOnline ? 'OK' : (a.status || '--')}</span>
+          <span class="px-2 py-0.5 rounded-full text-xs font-medium ${isOnline ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-500'}">${isOnline ? 'OK' : safeStatus}</span>
         </div>
       `}).join('');
     }
@@ -435,23 +442,27 @@
         }
         container.innerHTML = data.peers.map(p => {
           const name = p.alias || p.peerId;
-          const initial = name[0]?.toUpperCase() || '?';
+          const initial = escapeHtml(name[0]?.toUpperCase() || '?');
+          const safeAlias = p.alias ? escapeHtml(p.alias) : '<span class="text-slate-400">No alias</span>';
+          const safePeerId = escapeHtml(p.peerId);
+          const safeAccountId = escapeHtml(p.accountId);
+          const safeAliasValue = escapeHtml(p.alias || '');
           return `
           <div class="flex items-center justify-between py-2.5 px-3 bg-slate-50 rounded-lg">
             <div class="flex items-center gap-3 flex-1 min-w-0 mr-3">
               <div class="w-8 h-8 rounded-full ${weixinOnline ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'} flex items-center justify-center text-xs font-bold shrink-0">${initial}</div>
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2">
-                  <span class="text-sm font-semibold text-slate-700">${p.alias || '<span class=&quot;text-slate-400&quot;>No alias</span>'}</span>
+                  <span class="text-sm font-semibold text-slate-700">${safeAlias}</span>
                   <span class="px-2 py-0.5 rounded-full text-xs font-medium ${weixinOnline ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">${weixinOnline ? 'OK' : 'Offline'}</span>
                 </div>
-                <div class="text-xs text-slate-400 truncate">${p.peerId}</div>
-                <div class="text-xs text-slate-400">via ${p.accountId}</div>
+                <div class="text-xs text-slate-400 truncate">${safePeerId}</div>
+                <div class="text-xs text-slate-400">via ${safeAccountId}</div>
               </div>
             </div>
             <div class="flex items-center gap-2 shrink-0">
               <input type="text" class="w-20 px-2 py-1 text-sm border border-slate-200 rounded focus:ring-1 focus:ring-indigo-300 outline-none"
-                     placeholder="Alias" value="${p.alias || ''}" data-peer-id="${p.peerId}">
+                     placeholder="Alias" value="${safeAliasValue}" data-peer-id="${safePeerId}">
               <button class="text-xs px-2 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition"
                       onclick="saveAlias(this)">Save</button>
             </div>
