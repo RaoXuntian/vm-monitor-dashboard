@@ -19,6 +19,11 @@ node server.js
 
 > **Note:** The server binds to `127.0.0.1` (loopback) by default. Set `HOST=0.0.0.0` only if you intentionally expose it; for remote access, prefer a reverse proxy such as [Caddy](https://caddyserver.com/).
 
+## Quick End
+
+- If you started it manually with `node server.js`, press `Ctrl+C` in that terminal.
+- If you run it as a systemd service: `sudo systemctl stop vm-monitor-dashboard.service` (or `systemctl --user stop vm-monitor-dashboard.service` for a user service).
+
 ## Systemd Service
 
 This repo does **not** ship a unit file. Save one (e.g. `/etc/systemd/system/vm-monitor-dashboard.service` for system scope, or `~/.config/systemd/user/` for user scope) using the example below, then reload systemd and manage it as usual:
