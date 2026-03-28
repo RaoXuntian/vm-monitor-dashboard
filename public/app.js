@@ -144,12 +144,9 @@ function render() {
 
   const allNetRates = series.flatMap((point) => [Math.max(0, point.networkRxRateBps || 0), Math.max(0, point.networkTxRateBps || 0)]);
 
-  // Network bursts are spiky, so use a high-percentile-style ceiling instead of
-  // a strict max. Sorting and taking the 99th percentile keeps one outlier from
-  // flattening the whole chart; 1.2x headroom prevents the line from hugging the top.
-  const sortedNetRates = allNetRates.filter(Number.isFinite).sort((a, b) => a - b);
-  const p99 = sortedNetRates.length ? sortedNetRates[Math.min(sortedNetRates.length - 1, Math.floor(sortedNetRates.length * 0.99))] : 1;
-  const networkMax = Math.max(1, p99 * 1.2);
+  // Use simple max with headroom instead of expensive P99 sort for better performance
+  const maxVal = allNetRates.length > 0 ? Math.max(...allNetRates) : 1;
+  const networkMax = Math.max(1, maxVal * 1.2);
 
   renderLineChart('chart-network', series, [
     { key: 'networkRxRateBps', color: '#63e2c6', gradientId: 'rxGradient', fillFrom: 'rgba(99,226,198,0.36)', fillTo: 'rgba(99,226,198,0.02)', label: 'Inbound' },
