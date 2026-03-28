@@ -126,15 +126,13 @@ function render() {
     { key: 'memoryUsagePercent', color: '#c28cff', gradientId: 'memoryGradient', fillFrom: 'rgba(194,140,255,0.38)', fillTo: 'rgba(194,140,255,0.02)', label: 'Memory' },
   ], { yMin: 0, yMax: 100, ySuffix: '%' });
 
-  const allNetRates = series.flatMap((point) => [point.networkRxRateBps || 0, point.networkTxRateBps || 0]).filter((v) => v > 0).sort((a, b) => a - b);
-  const trueMax = allNetRates.length > 0 ? allNetRates[allNetRates.length - 1] : 1;
-  const p99 = allNetRates.length > 0 ? allNetRates[Math.floor(allNetRates.length * 0.99)] : 1;
-  const networkMax = Math.max(1, trueMax * 1.1); // coordinate mapping uses true max + 10% padding
-  const networkLabelMax = Math.max(1, p99 * 1.2); // Y-axis labels use P99 for readability
+  const allNetRates = series.flatMap((point) => [point.networkRxRateBps || 0, point.networkTxRateBps || 0]).filter((v) => v > 0);
+  const trueMax = allNetRates.length > 0 ? Math.max(...allNetRates) : 1;
+  const networkMax = Math.max(1, trueMax * 1.1);
   renderLineChart('chart-network', series, [
     { key: 'networkRxRateBps', color: '#63e2c6', gradientId: 'rxGradient', fillFrom: 'rgba(99,226,198,0.36)', fillTo: 'rgba(99,226,198,0.02)', label: 'Inbound' },
     { key: 'networkTxRateBps', color: '#f6c760', gradientId: 'txGradient', fillFrom: 'rgba(246,199,96,0.26)', fillTo: 'rgba(246,199,96,0.02)', label: 'Outbound' },
-  ], { yMin: 0, yMax: networkMax, yLabelMax: networkLabelMax, formatter: formatRate });
+  ], { yMin: 0, yMax: networkMax, formatter: formatRate });
 }
 
 function renderNodeInfo(node) {
@@ -299,7 +297,6 @@ function renderLineChart(id, series, defs, options) {
   const maxTs = plotSeries.at(-1)?.timestamp || minTs + 1;
   const yMin = options.yMin ?? 0;
   const yMax = options.yMax ?? 100;
-  const yLabelMax = options.yLabelMax ?? yMax;
 
   svg.setAttribute('width', width);
   svg.setAttribute('height', height);
@@ -307,12 +304,12 @@ function renderLineChart(id, series, defs, options) {
   const x = (ts) => pad.left + ((ts - minTs) / Math.max(1, maxTs - minTs)) * innerW;
   const y = (v) => {
     const raw = pad.top + innerH - ((v - yMin) / Math.max(1, yMax - yMin)) * innerH;
-    return Math.max(pad.top, Math.min(pad.top + innerH, raw)); // clamp to plot area
+    return Math.max(pad.top, Math.min(pad.top + innerH, raw));
   };
 
   const grid = [0, 0.25, 0.5, 0.75, 1].map((p) => {
     const yy = pad.top + innerH * p;
-    const val = yLabelMax - (yLabelMax - yMin) * p;
+    const val = yMax - (yMax - yMin) * p;
     const label = options.ySuffix ? `${val.toFixed(0)}${options.ySuffix}` : (options.formatter ? options.formatter(val) : val.toFixed(0));
     return `
       <line class="chart-grid" x1="${pad.left}" y1="${yy}" x2="${width - pad.right}" y2="${yy}" />
