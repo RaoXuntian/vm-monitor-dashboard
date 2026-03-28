@@ -62,9 +62,9 @@
           <div class="text-xs text-slate-400">Dashboard</div>
           <div class="text-sm font-semibold text-slate-700 truncate" id="oc-dashboard">--</div>
         </div>
-        <div class="bg-slate-50 rounded-lg p-2.5">
+        <div class="bg-slate-50 rounded-lg p-2.5 overflow-hidden">
           <div class="text-xs text-slate-400">Tailscale</div>
-          <div class="text-sm font-semibold text-slate-700" id="oc-tailscale">--</div>
+          <div class="text-sm font-semibold text-slate-700 truncate" id="oc-tailscale" title="">--</div>
         </div>
       </div>
     </section>
@@ -159,9 +159,9 @@
       $('gateway-service-name').textContent = oc.gatewayService || '--';
       $('oc-version').textContent = oc.version || '--';
       $('oc-sessions').textContent = String(oc.sessions ?? '--');
-      $('oc-heartbeat').textContent = oc.heartbeat || '--';
+      $('oc-heartbeat').textContent = oc.heartbeat || 'N/A';
       $('oc-dashboard').textContent = oc.dashboard || '--';
-      $('oc-tailscale').textContent = oc.tailscale || '--';
+      var _ts = oc.tailscale || '--'; $('oc-tailscale').textContent = _ts; $('oc-tailscale').title = _ts;
     }
 
     // --- Weixin ---
