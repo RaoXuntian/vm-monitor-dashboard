@@ -6,6 +6,7 @@ const os = require('os');
 const { URL } = require('url');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
+const crypto = require('crypto');
 
 const execFileAsync = promisify(execFile);
 const PORT = Number(process.env.PORT || 3000);
@@ -20,6 +21,7 @@ const OPENCLAW_EXEC_TIMEOUT_MS = 30000;
 const SYSTEMCTL_BIN = '/usr/bin/systemctl';
 const JOURNALCTL_BIN = '/usr/bin/journalctl';
 const BASH_BIN = '/bin/bash';
+const WEIXIN_QR_TTL_MS = 5 * 60 * 1000;
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const DATA_DIR = path.join(ROOT, 'data');
@@ -40,6 +42,7 @@ let latestOpenClawStatus = null;
 let detectedGatewayServiceName = 'openclaw-gateway';
 let monthlyTrafficState = null;
 const sseClients = new Set();
+const weixinQrSessions = new Map();
 
 async function ensureDataDir() {
   await fsp.mkdir(DATA_DIR, { recursive: true });
@@ -620,6 +623,76 @@ async function runCommand(file, args, options = {}) {
   }
 }
 
+function cleanupWeixinQrSessions() {
+  const cutoff = Date.now() - WEIXIN_QR_TTL_MS;
+  for (const [sessionId, session] of weixinQrSessions.entries()) {
+    if (!session?.startedAt || session.startedAt < cutoff) {
+      weixinQrSessions.delete(sessionId);
+    }
+  }
+}
+
+function getWeixinStatusMessage(status) {
+  if (status === 'scaned') return 'Scanned! Confirm on phone...';
+  if (status === 'confirmed') return '✅ Connected!';
+  if (status === 'expired') return '⏰ Expired, try again';
+  return 'Waiting for scan...';
+}
+
+async function fetchJson(url, options = {}) {
+  const response = await fetch(url, options);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw Object.assign(new Error(data?.message || `Request failed with status ${response.status}`), { statusCode: 502 });
+  }
+  return data;
+}
+
+async function handleWeixinQrStart(req, res) {
+  const body = await readRequestBody(req);
+  if (body.password !== '1874') {
+    return sendJson(res, 403, { error: 'Invalid password' });
+  }
+
+  cleanupWeixinQrSessions();
+  const data = await fetchJson('https://ilinkai.weixin.qq.com/ilink/bot/get_bot_qrcode?bot_type=3');
+  const sessionId = crypto.randomUUID();
+  weixinQrSessions.set(sessionId, {
+    qrcode: data.qrcode,
+    qrcodeUrl: data.qrcode_img_content,
+    startedAt: Date.now(),
+  });
+
+  return sendJson(res, 200, { sessionId, qrcodeUrl: data.qrcode_img_content });
+}
+
+async function handleWeixinQrStatus(res, searchParams) {
+  cleanupWeixinQrSessions();
+  const sessionId = searchParams.get('session');
+  const session = sessionId ? weixinQrSessions.get(sessionId) : null;
+  if (!session) {
+    return sendJson(res, 404, { error: 'QR session not found or expired' });
+  }
+
+  const encodedQr = encodeURIComponent(session.qrcode);
+  const data = await fetchJson(`https://ilinkai.weixin.qq.com/ilink/bot/get_qrcode_status?qrcode=${encodedQr}`, {
+    headers: {
+      'iLink-App-ClientVersion': '1',
+    },
+  });
+
+  if (data.status === 'confirmed' || data.status === 'expired') {
+    weixinQrSessions.delete(sessionId);
+    refreshOpenClawStatus().catch(() => {});
+  }
+
+  return sendJson(res, 200, {
+    status: data.status || 'wait',
+    accountId: data.ilink_bot_id || data.ilink_user_id || null,
+    message: getWeixinStatusMessage(data.status || 'wait'),
+  });
+}
+
 async function runOpenClawAction(kind) {
   if (kind === 'openclaw-restart') {
     return runCommand(SYSTEMCTL_BIN, ['restart', detectedGatewayServiceName], { timeout: 30000 });
@@ -673,6 +746,20 @@ async function handleApi(req, res, pathname, searchParams) {
     return sendJson(res, 200, latestSample);
   }
 
+  if (pathname === '/api/weixin/status') {
+    return sendJson(res, 200, latestOpenClawStatus?.weixin || { enabled: false, state: 'UNKNOWN' });
+  }
+
+  if (pathname === '/api/weixin/qr/start') {
+    if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method not allowed' }, { Allow: 'POST' });
+    return handleWeixinQrStart(req, res);
+  }
+
+  if (pathname === '/api/weixin/qr/status') {
+    if (req.method !== 'GET') return sendJson(res, 405, { error: 'Method not allowed' }, { Allow: 'GET' });
+    return handleWeixinQrStatus(res, searchParams);
+  }
+
   if (pathname === '/api/metrics') {
     const hours = Number(searchParams.get('hours') || '24');
     const clampedHours = Math.max(1 / 6, Math.min(24 * 7, hours));
@@ -706,6 +793,10 @@ async function bootstrap() {
   setInterval(() => {
     if (latestSample) broadcastSse(latestSample);
   }, SSE_INTERVAL_MS).unref();
+
+  setInterval(() => {
+    cleanupWeixinQrSessions();
+  }, 60000).unref();
 }
 
 const server = http.createServer(async (req, res) => {
@@ -713,6 +804,9 @@ const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     if (url.pathname.startsWith('/api/')) {
       return await handleApi(req, res, url.pathname, url.searchParams);
+    }
+    if (url.pathname === '/weixin' || url.pathname === '/weixin/') {
+      return await serveStatic(res, '/weixin.html');
     }
     return await serveStatic(res, url.pathname);
   } catch (err) {

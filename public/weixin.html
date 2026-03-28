@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WeChat Management</title>
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    :root {
+      color-scheme: dark light;
+      --page-bg: #0a0a0f;
+      --page-bg-soft: rgba(15, 23, 42, 0.8);
+      --page-border: rgba(148, 163, 184, 0.16);
+      --page-shadow: 0 24px 60px rgba(0, 0, 0, 0.34);
+      --text-primary: #eef2ff;
+      --text-secondary: #c7d2fe;
+      --text-muted: #a5b4d4;
+      --success-strong: #6ee7b7;
+      --success-soft: rgba(16, 185, 129, 0.18);
+      --danger-strong: #fda4af;
+      --danger-soft: rgba(244, 63, 94, 0.18);
+      --warning-strong: #fcd34d;
+      --warning-soft: rgba(245, 158, 11, 0.18);
+      --focus-ring: rgba(129, 140, 248, 0.45);
+      --button-disabled: rgba(255, 255, 255, 0.08);
+      --button-active: linear-gradient(135deg, rgba(99, 102, 241, 0.3), rgba(139, 92, 246, 0.24));
+      --button-border: rgba(129, 140, 248, 0.36);
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        --page-bg: #eef2ff;
+        --page-bg-soft: rgba(255, 255, 255, 0.82);
+        --page-border: rgba(99, 102, 241, 0.12);
+        --page-shadow: 0 24px 60px rgba(99, 102, 241, 0.12);
+        --text-primary: #111827;
+        --text-secondary: #312e81;
+        --text-muted: #475569;
+        --success-strong: #047857;
+        --success-soft: rgba(16, 185, 129, 0.12);
+        --danger-strong: #be123c;
+        --danger-soft: rgba(244, 63, 94, 0.12);
+        --warning-strong: #b45309;
+        --warning-soft: rgba(245, 158, 11, 0.12);
+        --focus-ring: rgba(79, 70, 229, 0.25);
+        --button-disabled: rgba(15, 23, 42, 0.08);
+        --button-active: linear-gradient(135deg, rgba(79, 70, 229, 0.16), rgba(124, 58, 237, 0.14));
+        --button-border: rgba(79, 70, 229, 0.18);
+      }
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background:
+        radial-gradient(circle at top left, rgba(99, 102, 241, 0.18), transparent 24%),
+        radial-gradient(circle at bottom right, rgba(139, 92, 246, 0.15), transparent 24%),
+        var(--page-bg);
+      color: var(--text-primary);
+    }
+
+    body {
+      padding: 20px;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    a, button, input {
+      font: inherit;
+    }
+
+    .page-shell {
+      max-width: 1180px;
+      margin: 0 auto;
+      display: grid;
+      gap: 16px;
+    }
+
+    .glass-card {
+      background: var(--page-bg-soft);
+      border: 1px solid var(--page-border);
+      border-radius: 28px;
+      backdrop-filter: blur(18px);
+      box-shadow: var(--page-shadow);
+    }
+
+    .header-card,
+    .summary-card,
+    .accounts-card,
+    .qr-card {
+      padding: 20px;
+    }
+
+    .back-link {
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: 16px;
+      text-decoration: none;
+      color: var(--text-secondary);
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      width: fit-content;
+      transition: transform 180ms ease, background 180ms ease, border-color 180ms ease;
+    }
+
+    .back-link:hover { transform: translateY(-1px); }
+
+    .header-row {
+      display: grid;
+      gap: 16px;
+      margin-top: 14px;
+    }
+
+    .eyebrow {
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.78rem;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    h1 {
+      font-size: clamp(1.9rem, 6vw, 2.8rem);
+      line-height: 1.05;
+      margin-top: 8px;
+    }
+
+    .lead {
+      color: var(--text-secondary);
+      line-height: 1.6;
+      max-width: 66ch;
+      margin-top: 10px;
+    }
+
+    .bento-grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: 1fr;
+    }
+
+    .summary-grid,
+    .accounts-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: 1fr;
+    }
+
+    .metric-box,
+    .account-item,
+    .qr-stage,
+    .helper-banner {
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 20px;
+    }
+
+    .metric-box {
+      padding: 16px;
+      min-height: 116px;
+      display: grid;
+      gap: 8px;
+      align-content: start;
+    }
+
+    .metric-label,
+    .helper-text,
+    .account-note,
+    .field-help,
+    .status-detail,
+    .empty-state {
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .metric-value {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .summary-state {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .section-title {
+      margin-bottom: 14px;
+      font-size: 1.05rem;
+    }
+
+    .account-item {
+      padding: 16px;
+      display: grid;
+      gap: 12px;
+      min-height: 132px;
+    }
+
+    .account-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .account-id {
+      font-weight: 700;
+      word-break: break-word;
+      line-height: 1.4;
+    }
+
+    .status-chip {
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: 999px;
+      font-weight: 700;
+      white-space: nowrap;
+      border: 1px solid transparent;
+    }
+
+    .status-chip svg {
+      width: 18px;
+      height: 18px;
+      flex: 0 0 auto;
+    }
+
+    .status-chip.ok {
+      color: var(--success-strong);
+      background: var(--success-soft);
+      border-color: rgba(16, 185, 129, 0.24);
+    }
+
+    .status-chip.error {
+      color: var(--danger-strong);
+      background: var(--danger-soft);
+      border-color: rgba(244, 63, 94, 0.24);
+    }
+
+    .status-chip.warn {
+      color: var(--warning-strong);
+      background: var(--warning-soft);
+      border-color: rgba(245, 158, 11, 0.24);
+    }
+
+    .empty-state {
+      padding: 20px;
+    }
+
+    .field-group {
+      display: grid;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    label {
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+
+    .input-row {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .password-input {
+      min-height: 48px;
+      width: 100%;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text-primary);
+      padding: 12px 16px;
+      transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+    }
+
+    .password-input::placeholder { color: var(--text-muted); }
+
+    .password-input:focus-visible,
+    .action-button:focus-visible,
+    .back-link:focus-visible,
+    .retry-button:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 4px var(--focus-ring);
+      border-color: rgba(129, 140, 248, 0.55);
+    }
+
+    .password-input.shake {
+      animation: shakeX 260ms ease;
+      border-color: rgba(244, 63, 94, 0.6);
+    }
+
+    .action-button,
+    .retry-button {
+      min-height: 48px;
+      min-width: 44px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 12px 18px;
+      border-radius: 16px;
+      border: 1px solid var(--button-border);
+      background: var(--button-disabled);
+      color: var(--text-muted);
+      cursor: not-allowed;
+      touch-action: manipulation;
+      transition: transform 180ms ease, opacity 180ms ease, background 180ms ease, color 180ms ease, border-color 180ms ease;
+    }
+
+    .action-button.is-ready,
+    .retry-button {
+      background: var(--button-active);
+      color: var(--text-primary);
+      cursor: pointer;
+    }
+
+    .action-button.is-loading {
+      cursor: wait;
+    }
+
+    .action-button:hover:is(.is-ready, .is-loading),
+    .retry-button:hover {
+      transform: translateY(-1px);
+    }
+
+    .button-spinner {
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      border: 2px solid rgba(255, 255, 255, 0.24);
+      border-top-color: currentColor;
+      animation: spin 800ms linear infinite;
+    }
+
+    .button-spinner.hidden,
+    .hidden {
+      display: none !important;
+    }
+
+    .field-error {
+      min-height: 22px;
+      color: var(--danger-strong);
+      font-weight: 600;
+    }
+
+    .helper-banner {
+      margin-top: 14px;
+      padding: 14px 16px;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--text-secondary);
+    }
+
+    .qr-panel {
+      margin-top: 18px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .qr-stage {
+      padding: 16px;
+      display: grid;
+      justify-items: center;
+      gap: 14px;
+      opacity: 0;
+      transform: translateY(12px) scale(0.98);
+      pointer-events: none;
+      transition: opacity 220ms ease, transform 220ms ease;
+    }
+
+    .qr-stage.visible {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      pointer-events: auto;
+    }
+
+    .qr-image-wrap {
+      width: min(100%, 320px);
+      aspect-ratio: 1;
+      border-radius: 22px;
+      padding: 14px;
+      background: #ffffff;
+      display: grid;
+      place-items: center;
+      box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+    }
+
+    .qr-image {
+      width: 100%;
+      height: auto;
+      display: block;
+      border-radius: 12px;
+    }
+
+    .qr-status {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      text-align: center;
+      line-height: 1.5;
+      font-weight: 700;
+      color: var(--text-secondary);
+    }
+
+    .qr-status svg {
+      width: 20px;
+      height: 20px;
+      flex: 0 0 auto;
+    }
+
+    .qr-status.waiting { color: var(--text-secondary); }
+    .qr-status.scanned {
+      color: var(--warning-strong);
+      animation: pulseGlow 1.4s ease-in-out infinite;
+    }
+    .qr-status.confirmed { color: var(--success-strong); }
+    .qr-status.expired,
+    .qr-status.error { color: var(--danger-strong); }
+
+    .status-row {
+      display: grid;
+      gap: 8px;
+      justify-items: center;
+    }
+
+    .success-badge {
+      width: 52px;
+      height: 52px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      color: var(--success-strong);
+      background: var(--success-soft);
+      border: 1px solid rgba(16, 185, 129, 0.24);
+      transform: scale(0.9);
+      opacity: 0;
+    }
+
+    .success-badge.visible {
+      opacity: 1;
+      transform: scale(1);
+      transition: opacity 180ms ease, transform 180ms ease;
+    }
+
+    .status-detail {
+      text-align: center;
+      max-width: 42ch;
+    }
+
+    .retry-row {
+      display: flex;
+      justify-content: center;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes pulseGlow {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.03); opacity: 0.9; }
+    }
+
+    @keyframes shakeX {
+      0%, 100% { transform: translateX(0); }
+      20% { transform: translateX(-6px); }
+      40% { transform: translateX(6px); }
+      60% { transform: translateX(-4px); }
+      80% { transform: translateX(4px); }
+    }
+
+    @media (min-width: 760px) {
+      body { padding: 28px; }
+      .header-card,
+      .summary-card,
+      .accounts-card,
+      .qr-card { padding: 24px; }
+      .bento-grid {
+        grid-template-columns: minmax(0, 1.1fr) minmax(340px, 0.9fr);
+        align-items: start;
+      }
+      .summary-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .accounts-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .input-row {
+        flex-direction: row;
+        align-items: end;
+      }
+      .input-row .field-group {
+        flex: 1 1 auto;
+      }
+      .action-button {
+        flex: 0 0 auto;
+        min-width: 190px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 1ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 1ms !important;
+        scroll-behavior: auto !important;
+      }
+      .qr-status.scanned { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page-shell" id="main-content">
+    <section class="glass-card header-card">
+      <a class="back-link" href="/" aria-label="Back to main dashboard">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>Back to dashboard</span>
+      </a>
+      <div class="header-row">
+        <div>
+          <div class="eyebrow">OpenClaw channel administration</div>
+          <h1>WeChat Management</h1>
+          <p class="lead">Monitor current Weixin channel health, review connected accounts, and generate a binding QR code for a new OpenClaw WeChat user.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="bento-grid">
+      <div class="glass-card summary-card">
+        <h2 class="section-title">Channel Status</h2>
+        <div class="summary-grid">
+          <article class="metric-box">
+            <div class="metric-label">Channel enabled</div>
+            <div class="metric-value" id="channel-enabled">Loading…</div>
+            <div class="helper-text">Whether the Weixin channel is currently turned on.</div>
+          </article>
+          <article class="metric-box">
+            <div class="metric-label">Channel state</div>
+            <div class="metric-value summary-state" id="channel-state-wrap">
+              <span id="channel-state">Loading…</span>
+            </div>
+            <div class="helper-text">Live status reported by OpenClaw.</div>
+          </article>
+          <article class="metric-box">
+            <div class="metric-label">Connected accounts</div>
+            <div class="metric-value" id="account-count">0</div>
+            <div class="helper-text">Known Weixin accounts exposed by the monitor.</div>
+          </article>
+        </div>
+      </div>
+
+      <div class="glass-card qr-card">
+        <h2 class="section-title">Generate QR Code</h2>
+        <p class="helper-text">QR generation is protected by the admin password. Viewing this page does not require authentication.</p>
+
+        <div class="input-row">
+          <div class="field-group">
+            <label for="password-input">Admin password</label>
+            <input
+              id="password-input"
+              class="password-input"
+              type="password"
+              placeholder="Enter admin password"
+              autocomplete="current-password"
+              aria-describedby="password-help password-error"
+            >
+            <div class="field-help" id="password-help">Enter the password to request a new Weixin binding QR code.</div>
+            <div class="field-error" id="password-error" role="alert" aria-live="polite"></div>
+          </div>
+
+          <button id="generate-button" class="action-button" type="button" disabled aria-disabled="true">
+            <span id="generate-spinner" class="button-spinner hidden" aria-hidden="true"></span>
+            <span id="generate-label">Generate QR Code</span>
+          </button>
+        </div>
+
+        <div class="helper-banner" id="qr-hint-banner">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" width="18" height="18">
+            <path d="M12 8v5m0 4h.01M22 12a10 10 0 11-20 0 10 10 0 0120 0z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>Generate a QR code, then ask the new user to scan it in WeChat and confirm on their phone.</span>
+        </div>
+
+        <div class="qr-panel" id="qr-panel" aria-live="polite">
+          <div class="qr-stage hidden" id="qr-stage">
+            <div class="qr-image-wrap">
+              <img id="qr-image" class="qr-image" alt="Weixin account binding QR code">
+            </div>
+            <div class="status-row">
+              <div id="success-badge" class="success-badge" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+              <div class="qr-status waiting" id="qr-status"></div>
+              <div class="status-detail" id="qr-detail">Waiting for scan…</div>
+            </div>
+            <div class="retry-row hidden" id="retry-row">
+              <button id="retry-button" class="retry-button" type="button">Generate a fresh QR code</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="glass-card accounts-card">
+      <h2 class="section-title">Connected Accounts</h2>
+      <div class="accounts-grid" id="accounts-grid"></div>
+    </section>
+  </main>
+
+  <script>
+    const icons = {
+      ok: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      error: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 8v4m0 4h.01M22 12a10 10 0 11-20 0 10 10 0 0120 0z" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      wait: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 6v6l4 2" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 12a10 10 0 11-20 0 10 10 0 0120 0z" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      scan: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7V5a1 1 0 011-1h2M20 7V5a1 1 0 00-1-1h-2M4 17v2a1 1 0 001 1h2M20 17v2a1 1 0 01-1 1h-2M8 12h8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    };
+
+    const channelEnabledEl = document.getElementById('channel-enabled');
+    const channelStateEl = document.getElementById('channel-state');
+    const accountCountEl = document.getElementById('account-count');
+    const accountsGridEl = document.getElementById('accounts-grid');
+    const passwordInputEl = document.getElementById('password-input');
+    const passwordErrorEl = document.getElementById('password-error');
+    const generateButtonEl = document.getElementById('generate-button');
+    const generateLabelEl = document.getElementById('generate-label');
+    const generateSpinnerEl = document.getElementById('generate-spinner');
+    const qrStageEl = document.getElementById('qr-stage');
+    const qrImageEl = document.getElementById('qr-image');
+    const qrStatusEl = document.getElementById('qr-status');
+    const qrDetailEl = document.getElementById('qr-detail');
+    const retryRowEl = document.getElementById('retry-row');
+    const retryButtonEl = document.getElementById('retry-button');
+    const successBadgeEl = document.getElementById('success-badge');
+
+    let qrPollTimer = null;
+    let activeSessionId = null;
+
+    function escapeHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function clearQrPolling() {
+      if (qrPollTimer) {
+        clearInterval(qrPollTimer);
+        qrPollTimer = null;
+      }
+    }
+
+    function statusTone(status) {
+      const normalized = String(status || '').toUpperCase();
+      if (['OK', 'CONNECTED', 'ONLINE', 'ACTIVE'].includes(normalized)) return 'ok';
+      if (['WARN', 'WAIT', 'PENDING', 'SCANNED', 'SCANED'].includes(normalized)) return 'warn';
+      return 'error';
+    }
+
+    function renderChip(status) {
+      const tone = statusTone(status);
+      const icon = tone === 'ok' ? icons.ok : tone === 'warn' ? icons.wait : icons.error;
+      return `<span class="status-chip ${tone}">${icon}<span>${escapeHtml(status || 'UNKNOWN')}</span></span>`;
+    }
+
+    function setGenerateButtonState() {
+      const hasPassword = passwordInputEl.value.trim().length > 0;
+      const isLoading = generateButtonEl.dataset.loading === 'true';
+      generateButtonEl.disabled = !hasPassword || isLoading;
+      generateButtonEl.setAttribute('aria-disabled', String(!hasPassword || isLoading));
+      generateButtonEl.classList.toggle('is-ready', hasPassword && !isLoading);
+      generateButtonEl.classList.toggle('is-loading', isLoading);
+    }
+
+    function setLoadingState(isLoading) {
+      generateButtonEl.dataset.loading = isLoading ? 'true' : 'false';
+      generateSpinnerEl.classList.toggle('hidden', !isLoading);
+      generateLabelEl.textContent = isLoading ? 'Generating...' : 'Generate QR Code';
+      setGenerateButtonState();
+    }
+
+    function showPasswordError(message) {
+      passwordErrorEl.textContent = message;
+      passwordInputEl.classList.remove('shake');
+      void passwordInputEl.offsetWidth;
+      passwordInputEl.classList.add('shake');
+      passwordInputEl.focus();
+    }
+
+    function clearPasswordError() {
+      passwordErrorEl.textContent = '';
+      passwordInputEl.classList.remove('shake');
+    }
+
+    function showQrStage() {
+      qrStageEl.classList.remove('hidden');
+      requestAnimationFrame(() => qrStageEl.classList.add('visible'));
+    }
+
+    function resetQrState() {
+      clearQrPolling();
+      activeSessionId = null;
+      qrStageEl.classList.remove('visible');
+      qrStageEl.classList.add('hidden');
+      retryRowEl.classList.add('hidden');
+      successBadgeEl.classList.remove('visible');
+      qrImageEl.removeAttribute('src');
+      qrStatusEl.className = 'qr-status waiting';
+      qrStatusEl.innerHTML = `${icons.wait}<span>Waiting for scan...</span>`;
+      qrDetailEl.textContent = 'Waiting for scan…';
+    }
+
+    function updateQrStatus(state, message, detail) {
+      const map = {
+        waiting: icons.wait,
+        scanned: icons.scan,
+        confirmed: icons.ok,
+        expired: icons.error,
+        error: icons.error,
+      };
+      qrStatusEl.className = `qr-status ${state}`;
+      qrStatusEl.innerHTML = `${map[state] || icons.wait}<span>${escapeHtml(message)}</span>`;
+      qrDetailEl.textContent = detail || '';
+      successBadgeEl.classList.toggle('visible', state === 'confirmed');
+      retryRowEl.classList.toggle('hidden', state !== 'expired' && state !== 'error');
+    }
+
+    function renderAccounts(accounts) {
+      if (!Array.isArray(accounts) || !accounts.length) {
+        accountsGridEl.innerHTML = '<div class="empty-state">No Weixin accounts are being reported yet.</div>';
+        return;
+      }
+
+      accountsGridEl.innerHTML = accounts.map((account) => `
+        <article class="account-item">
+          <div class="account-top">
+            <div>
+              <div class="account-id">${escapeHtml(account.account || 'Unknown account')}</div>
+              <div class="account-note">Account identifier exposed by OpenClaw.</div>
+            </div>
+            ${renderChip(account.status || 'UNKNOWN')}
+          </div>
+          <div class="account-note">${escapeHtml(account.notes || 'No extra notes reported.')}</div>
+        </article>
+      `).join('');
+    }
+
+    async function loadStatus() {
+      const response = await fetch('/api/weixin/status', { cache: 'no-store' });
+      if (!response.ok) throw new Error('Failed to load Weixin status');
+      const data = await response.json();
+      channelEnabledEl.textContent = data.enabled ? 'Enabled' : 'Disabled';
+      channelStateEl.textContent = data.state || 'UNKNOWN';
+      accountCountEl.textContent = Array.isArray(data.accounts) ? data.accounts.length : 0;
+      renderAccounts(data.accounts || []);
+    }
+
+    async function pollQrStatus() {
+      if (!activeSessionId) return;
+      try {
+        const response = await fetch(`/api/weixin/qr/status?session=${encodeURIComponent(activeSessionId)}`, { cache: 'no-store' });
+        const data = await response.json();
+
+        if (!response.ok) {
+          clearQrPolling();
+          updateQrStatus('error', data.error || 'QR session ended', 'Generate a fresh QR code to try again.');
+          return;
+        }
+
+        if (data.status === 'scaned') {
+          updateQrStatus('scanned', 'Scanned! Confirm on WeChat...', 'The QR code was scanned. Please confirm the login on the phone.');
+          return;
+        }
+
+        if (data.status === 'confirmed') {
+          clearQrPolling();
+          updateQrStatus('confirmed', 'Connected', data.accountId ? `Bound account: ${data.accountId}` : 'The Weixin account is now connected.');
+          loadStatus().catch(() => {});
+          return;
+        }
+
+        if (data.status === 'expired') {
+          clearQrPolling();
+          updateQrStatus('expired', 'Expired', 'This QR code has expired. Generate a fresh one to continue.');
+          return;
+        }
+
+        updateQrStatus('waiting', 'Waiting for scan...', 'Ask the new user to scan the QR code in WeChat.');
+      } catch (error) {
+        clearQrPolling();
+        updateQrStatus('error', 'Unable to poll QR status', error.message || 'Generate a fresh QR code to retry.');
+      }
+    }
+
+    async function startQrFlow() {
+      const password = passwordInputEl.value.trim();
+      if (!password) {
+        showPasswordError('Enter the admin password to generate a QR code.');
+        return;
+      }
+
+      clearPasswordError();
+      clearQrPolling();
+      setLoadingState(true);
+      retryRowEl.classList.add('hidden');
+
+      try {
+        const response = await fetch('/api/weixin/qr/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password }),
+        });
+        const data = await response.json();
+
+        if (response.status === 403) {
+          showPasswordError('Wrong password. Please try again.');
+          resetQrState();
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to generate QR code');
+        }
+
+        activeSessionId = data.sessionId;
+        qrImageEl.src = data.qrcodeUrl;
+        qrImageEl.alt = 'Weixin QR code ready to scan';
+        showQrStage();
+        updateQrStatus('waiting', 'Waiting for scan...', 'Ask the new user to scan the QR code in WeChat.');
+        qrPollTimer = setInterval(pollQrStatus, 2000);
+        pollQrStatus();
+      } catch (error) {
+        updateQrStatus('error', 'Failed to generate QR code', error.message || 'Please try again.');
+        showQrStage();
+      } finally {
+        setLoadingState(false);
+      }
+    }
+
+    passwordInputEl.addEventListener('input', () => {
+      clearPasswordError();
+      setGenerateButtonState();
+    });
+
+    passwordInputEl.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        if (!generateButtonEl.disabled) startQrFlow();
+      }
+    });
+
+    generateButtonEl.addEventListener('click', startQrFlow);
+    retryButtonEl.addEventListener('click', startQrFlow);
+
+    setGenerateButtonState();
+    loadStatus().catch((error) => {
+      channelEnabledEl.textContent = 'Unavailable';
+      channelStateEl.textContent = 'ERROR';
+      accountsGridEl.innerHTML = `<div class="empty-state">${escapeHtml(error.message || 'Failed to load status')}</div>`;
+    });
+  </script>
+</body>
+</html>
