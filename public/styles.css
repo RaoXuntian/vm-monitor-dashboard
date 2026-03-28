@@ -123,10 +123,13 @@
   border: 1px solid #e2e8f0;
   background: #f8fafc;
 }
-.alert-item.healthy { border-color: #a7f3d0; background: #ecfdf5; }
-.alert-item.warn { border-color: #fde68a; background: #fffbeb; }
-.alert-item.critical { border-color: #fecdd3; background: #fef2f2; }
-.alert-item.info { border-color: #e0e7ff; background: #eef2ff; color: #6366f1; }
+.alert-item.healthy { border-color: #86efac; background: #f0fdf4; color: #166534; }
+.alert-item.online { border-color: #16a34a; background: #166534; color: #dcfce7; }
+.alert-item.online strong { color: #bbf7d0; }
+.alert-item.warn { border-color: #fde68a; background: #fffbeb; color: #92400e; }
+.alert-item.critical { border-color: #fca5a5; background: #fef2f2; color: #991b1b; }
+.alert-item.unconfigured { border-color: #d1d5db; background: #f3f4f6; color: #6b7280; }
+.alert-item.unconfigured strong { color: #9ca3af; }
 
 /* Port pills */
 .port-pill {

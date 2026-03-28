@@ -37,8 +37,9 @@ const MIME = {
 let lastCpuSample = null;
 let lastNetworkSample = null;
 let latestSample = null;
-const cpuHistory = []; // Rolling buffer for 30s CPU avg (3 samples at 10s interval)
-const CPU_HISTORY_SIZE = 3;
+const cpuHistory = [];
+const memHistory = []; // Rolling buffer for 30s CPU avg (3 samples at 10s interval)
+const CPU_HISTORY_SIZE = 18; // 3 minutes at 10s interval
 let latestOpenClawStatus = null;
 let detectedGatewayServiceName = 'openclaw-gateway';
 let monthlyTrafficState = null;
@@ -375,16 +376,23 @@ function buildAlerts(sample) {
   const alerts = [];
   if (!sample) return alerts;
 
-  // CPU alert: use 30s rolling average instead of instantaneous value
+  // CPU alert: use 3-min rolling average
   const cpuAvg = cpuHistory.length > 0 ? cpuHistory.reduce((a, b) => a + b, 0) / cpuHistory.length : (sample.cpu?.usagePercent || 0);
-  const currentCpu = sample.cpu?.usagePercent ?? cpuAvg;
   if (cpuAvg >= 85) {
-    alerts.push({ level: 'critical', message: `CPU is high — 30s avg ${cpuAvg.toFixed(1)}% (current ${currentCpu.toFixed(1)}%)` });
+    alerts.push({ level: 'critical', message: `3-min avg ${cpuAvg.toFixed(1)}%` , category: 'System - CPU' });
   } else {
-    alerts.push({ level: 'healthy', message: `CPU normal — 30s avg ${cpuAvg.toFixed(1)}%` });
+    alerts.push({ level: 'healthy', message: `3-min avg ${cpuAvg.toFixed(1)}%`, category: 'System - CPU' });
   }
 
-  if ((sample.memory?.usagePercent || 0) >= 90) alerts.push({ level: 'critical', message: `Memory is high at ${sample.memory.usagePercent.toFixed(1)}%` });
+  // Memory alert: use 3-min rolling average
+  const memAvg = memHistory.length > 0 ? memHistory.reduce((a, b) => a + b, 0) / memHistory.length : (sample.memory?.usagePercent || 0);
+  if (memAvg >= 85) {
+    alerts.push({ level: 'critical', message: `3-min avg ${memAvg.toFixed(1)}%`, category: 'System - Memory' });
+  } else {
+    alerts.push({ level: 'healthy', message: `3-min avg ${memAvg.toFixed(1)}%`, category: 'System - Memory' });
+  }
+
+  if ((sample.disk?.usagePercent || 0) >= 90) alerts.push({ level: 'critical', message: `Disk is high at ${sample.disk.usagePercent.toFixed(1)}%`, category: 'System - Disk' });
   if ((sample.disk?.usagePercent || 0) >= 90) alerts.push({ level: 'critical', message: `Disk is high at ${sample.disk.usagePercent.toFixed(1)}%` });
 
   if (Array.isArray(sample.serviceHealth)) {
@@ -431,6 +439,10 @@ async function collectSample() {
   lastCpuSample = cpuNow;
   if (cpuUsagePercent !== null) {
     cpuHistory.push(cpuUsagePercent);
+  }
+  if (memory?.usagePercent != null) {
+    memHistory.push(memory.usagePercent);
+    if (memHistory.length > CPU_HISTORY_SIZE) memHistory.shift();
     if (cpuHistory.length > CPU_HISTORY_SIZE) cpuHistory.shift();
   }
 

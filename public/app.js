@@ -160,13 +160,10 @@ function renderAlerts(alerts, serviceHealth) {
   const el = $('alert-list');
   const rows = [];
 
-  // Capacity alerts from backend (CPU avg, memory, disk)
+  // Capacity alerts from backend (CPU, memory, disk)
   for (const alert of alerts) {
-    if (alert.level === 'healthy') {
-      rows.push(`<div class="alert-item healthy"><strong>System</strong><span>${escapeHtml(alert.message)}</span></div>`);
-    } else {
-      rows.push(`<div class="alert-item ${alert.level}"><strong>Alert</strong><span>${escapeHtml(alert.message)}</span></div>`);
-    }
+    const label = alert.category || 'System';
+    rows.push(`<div class="alert-item ${alert.level}"><strong>${escapeHtml(label)}</strong><span>${escapeHtml(alert.message)}</span></div>`);
   }
 
   // Per-service health rows
@@ -174,10 +171,10 @@ function renderAlerts(alerts, serviceHealth) {
     for (const svc of serviceHealth) {
       let level, label;
       if (svc.active) {
-        level = 'healthy';
+        level = 'online';
         label = '● Online';
       } else if (svc.state === 'not-found' || svc.state === 'not-installed') {
-        level = 'info';
+        level = 'unconfigured';
         label = '○ Not Configured';
       } else {
         level = 'critical';
