@@ -4,9 +4,20 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>OpenClaw Management</title>
+  <!-- DNS prefetch + preconnect for CDN origins to shave off connection latency -->
+  <link rel="dns-prefetch" href="https://cdn.tailwindcss.com" />
+  <link rel="dns-prefetch" href="https://unpkg.com" />
+  <link rel="dns-prefetch" href="https://cdn.jsdelivr.net" />
+  <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin />
+  <link rel="preconnect" href="https://unpkg.com" crossorigin />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <!-- Prefetch the dashboard so back-navigation feels instant -->
+  <link rel="prefetch" href="/" />
+  <link rel="prefetch" href="/app.js" />
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+  <script src="https://unpkg.com/lucide@0.468.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+  <link rel="stylesheet" href="/styles.css" />
   <script>
   // Page-local i18n used by the management console. localStorage is shared with
   // the main dashboard so language changes stay consistent across both pages.
@@ -298,14 +309,19 @@
 
     // --- Initial page hydration ---
     // Fetching both endpoints lets the page paint quickly even before the first SSE event arrives.
-    fetch('/api/latest').then(r => r.json()).then(data => {
-      const oc = data.openclaw;
-      if (oc) updateGatewayStatus(oc);
-      if (oc?.weixin) updateWeixinStatus(oc.weixin);
-    }).catch(() => {});
-    fetch('/api/weixin/status').then(r => r.json()).then(data => {
-      if (data.accounts) renderAccounts(data.accounts);
-      if (data.state) updateWeixinStatus(data);
+    Promise.all([
+      fetch('/api/latest').then(r => r.json()).then(data => {
+        const oc = data.openclaw;
+        if (oc) updateGatewayStatus(oc);
+        if (oc?.weixin) updateWeixinStatus(oc.weixin);
+      }),
+      fetch('/api/weixin/status').then(r => r.json()).then(data => {
+        if (data.accounts) renderAccounts(data.accounts);
+        if (data.state) updateWeixinStatus(data);
+      }),
+    ]).then(() => {
+      // Signal that the page is ready — triggers a subtle reveal animation.
+      document.querySelector('main')?.classList.add('ready-fade');
     }).catch(() => {});
 
     // --- Manual refresh ---

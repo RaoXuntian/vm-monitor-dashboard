@@ -10,7 +10,13 @@ const state = {
   payload: null,
   eventSource: null,
   pendingConfirmAction: null,
+  sseReloadTimer: null,       // debounce SSE-triggered data reloads
 };
+
+// Debounce interval (ms) between SSE-triggered full data reloads.  Multiple SSE
+// events that arrive within this window are coalesced into a single /api/metrics
+// fetch so the browser isn't hammered with redundant network + render cycles.
+const SSE_RELOAD_DEBOUNCE_MS = 2000;
 
 const $ = (id) => document.getElementById(id);
 const fmtPct = (n) => n == null ? '--' : `${Number(n).toFixed(1)}%`;
@@ -572,21 +578,26 @@ function bindActionButtons() {
 
 /**
  * Connect to the live SSE stream.
- * Every message triggers a full reload from /api/metrics so the page stays in sync
- * with the selected time range, not just the single latest sample.
+ * SSE messages are debounced: rapid bursts of events within SSE_RELOAD_DEBOUNCE_MS
+ * are coalesced into a single /api/metrics fetch to avoid redundant network + render work.
  */
 function connectStream() {
   if (state.eventSource) state.eventSource.close();
   const es = new EventSource('/api/stream');
   state.eventSource = es;
   es.onopen = () => updateStreamStatus('Live stream connected', true);
-  es.onmessage = async () => {
+  es.onmessage = () => {
     updateStreamStatus('Live stream connected', true);
-    try {
-      await loadData();
-    } catch (err) {
-      console.error(err);
-    }
+    // Debounce: coalesce rapid SSE bursts into one data reload
+    if (state.sseReloadTimer) clearTimeout(state.sseReloadTimer);
+    state.sseReloadTimer = setTimeout(async () => {
+      state.sseReloadTimer = null;
+      try {
+        await loadData();
+      } catch (err) {
+        console.error(err);
+      }
+    }, SSE_RELOAD_DEBOUNCE_MS);
   };
   es.onerror = () => updateStreamStatus('Stream reconnecting…', false);
 }
@@ -614,6 +625,8 @@ setActiveRange(state.rangeHours);
     await loadData();
     bindActionButtons();
     connectStream();
+    // Signal that the dashboard is ready — triggers a subtle reveal animation.
+    document.querySelector('main')?.classList.add('ready-fade');
   } catch (err) {
     console.error(err);
     updateStreamStatus('Initial load failed', false);

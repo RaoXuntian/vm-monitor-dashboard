@@ -4,8 +4,15 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Azure VM Dashboard</title>
+  <!-- DNS prefetch + preconnect for CDN origins to shave off connection latency -->
+  <link rel="dns-prefetch" href="https://cdn.tailwindcss.com" />
+  <link rel="dns-prefetch" href="https://unpkg.com" />
+  <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin />
+  <link rel="preconnect" href="https://unpkg.com" crossorigin />
+  <!-- Prefetch the other page so navigation feels instant -->
+  <link rel="prefetch" href="/weixin" />
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://unpkg.com/lucide@0.468.0"></script>
   <link rel="stylesheet" href="/styles.css" />
   <script>
   // Lightweight page-level i18n dictionary. Text nodes are mapped by data-i18n

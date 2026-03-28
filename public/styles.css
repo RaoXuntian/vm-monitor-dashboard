@@ -176,3 +176,42 @@
   padding: 8px 6px;
   border-bottom: 1px solid #f1f5f9;
 }
+
+/* ─── Page Transition ──────────────────────────────────────────────────── */
+/* Smooth cross-fade via the View Transitions API.  Browsers that support it
+   (Chrome 111+, Edge 111+) get a seamless page-swap animation; others fall
+   back to a normal navigation with no visible regression. */
+@view-transition {
+  navigation: auto;
+}
+
+::view-transition-old(root) {
+  animation: fade-out 0.15s ease-out;
+}
+::view-transition-new(root) {
+  animation: fade-in 0.2s ease-in;
+}
+
+@keyframes fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ─── Initial paint optimisation ───────────────────────────────────────── */
+/* Show page content immediately so the user sees structure before JS loads. */
+body {
+  opacity: 1;
+}
+
+/* Smooth reveal after the initial JS render completes. */
+.ready-fade {
+  animation: content-ready 0.25s ease-out;
+}
+@keyframes content-ready {
+  from { opacity: 0.6; transform: translateY(4px); }
+  to   { opacity: 1;   transform: translateY(0);   }
+}

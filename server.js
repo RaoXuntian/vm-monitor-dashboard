@@ -15,11 +15,13 @@ const fsp = require('fs/promises');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
+const zlib = require('zlib');
 const { URL } = require('url');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 
 const execFileAsync = promisify(execFile);
+const gzipAsync = promisify(zlib.gzip);
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
   const controller = new AbortController();
@@ -74,6 +76,30 @@ let latestServiceHealth = [];
 let detectedGatewayServiceName = 'openclaw-gateway';
 let monthlyTrafficState = null;
 const sseClients = new Set(); // One entry per connected browser tab
+
+// ─── Static File Cache ──────────────────────────────────────────────────
+// In-memory cache for static assets: stores raw data, gzip-compressed data,
+// ETag, and Content-Type.  Eliminates redundant disk reads and on-the-fly
+// compression for every request.  Entries are invalidated by file mtime.
+const staticCache = new Map();
+const COMPRESSIBLE_TYPES = new Set(['.html', '.css', '.js', '.json', '.svg']);
+
+async function getCachedStatic(absPath) {
+  const ext = path.extname(absPath);
+  const stat = await fsp.stat(absPath);
+  const mtimeMs = stat.mtimeMs;
+  const cached = staticCache.get(absPath);
+  if (cached && cached.mtimeMs === mtimeMs) return cached;
+  const raw = await fsp.readFile(absPath);
+  const etag = '"' + crypto.createHash('md5').update(raw).digest('hex') + '"';
+  const contentType = MIME[ext] || 'application/octet-stream';
+  const entry = { raw, etag, contentType, mtimeMs, gzipped: null };
+  if (COMPRESSIBLE_TYPES.has(ext) && raw.length > 256) {
+    entry.gzipped = await gzipAsync(raw, { level: zlib.constants.Z_BEST_COMPRESSION });
+  }
+  staticCache.set(absPath, entry);
+  return entry;
+}
 
 // QR sessions are ephemeral WeChat login flows; TTL prevents stale sessions accumulating
 const qrSessions = new Map();
@@ -675,13 +701,37 @@ function buildMetricsPayload(samples, rangeHours) {
   };
 }
 
-function sendJson(res, status, data, extraHeaders = {}) {
-  res.writeHead(status, {
+function sendJson(res, status, data, extraHeaders = {}, req = null) {
+  const body = JSON.stringify(data);
+  const headers = {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
     ...extraHeaders,
-  });
-  res.end(JSON.stringify(data));
+  };
+
+  // Gzip-compress large JSON responses (>1 KB) when the client supports it.
+  // The /api/metrics endpoint can return hundreds of KB of samples.
+  const acceptEncoding = req?.headers?.['accept-encoding'] || '';
+  if (acceptEncoding.includes('gzip') && body.length > 1024) {
+    zlib.gzip(body, { level: zlib.constants.Z_DEFAULT_COMPRESSION }, (err, compressed) => {
+      if (err) {
+        headers['Content-Length'] = Buffer.byteLength(body);
+        res.writeHead(status, headers);
+        res.end(body);
+        return;
+      }
+      headers['Content-Encoding'] = 'gzip';
+      headers['Content-Length'] = compressed.length;
+      headers.Vary = 'Accept-Encoding';
+      res.writeHead(status, headers);
+      res.end(compressed);
+    });
+    return;
+  }
+
+  headers['Content-Length'] = Buffer.byteLength(body);
+  res.writeHead(status, headers);
+  res.end(body);
 }
 
 function sendText(res, status, text, contentType = 'text/plain; charset=utf-8', extraHeaders = {}) {
@@ -689,14 +739,40 @@ function sendText(res, status, text, contentType = 'text/plain; charset=utf-8', 
   res.end(text);
 }
 
-async function serveStatic(res, pathname) {
+async function serveStatic(req, res, pathname) {
   let filePath = pathname === '/' ? '/index.html' : pathname;
   filePath = path.normalize(filePath).replace(/^\.\.(\/|\\|$)/, '');
   const absPath = path.join(PUBLIC_DIR, filePath);
   if (!absPath.startsWith(PUBLIC_DIR)) return sendText(res, 403, 'Forbidden');
   try {
-    const data = await fsp.readFile(absPath);
-    return sendText(res, 200, data, MIME[path.extname(absPath)] || 'application/octet-stream');
+    const entry = await getCachedStatic(absPath);
+
+    // 304 Not Modified: skip body entirely when browser already has current version
+    if (req.headers['if-none-match'] === entry.etag) {
+      res.writeHead(304, { ETag: entry.etag });
+      res.end();
+      return;
+    }
+
+    const headers = {
+      'Content-Type': entry.contentType,
+      ETag: entry.etag,
+      'Cache-Control': 'public, max-age=60, stale-while-revalidate=600',
+    };
+
+    // Prefer gzip when the client supports it and we have a pre-compressed copy
+    const acceptEncoding = req.headers['accept-encoding'] || '';
+    if (entry.gzipped && acceptEncoding.includes('gzip')) {
+      headers['Content-Encoding'] = 'gzip';
+      headers['Content-Length'] = entry.gzipped.length;
+      headers.Vary = 'Accept-Encoding';
+      res.writeHead(200, headers);
+      res.end(entry.gzipped);
+    } else {
+      headers['Content-Length'] = entry.raw.length;
+      res.writeHead(200, headers);
+      res.end(entry.raw);
+    }
   } catch {
     return sendText(res, 404, 'Not Found');
   }
@@ -1037,11 +1113,11 @@ async function handleApi(req, res, pathname, searchParams) {
   }
 
   if (pathname === '/api/latest') {
-    return sendJson(res, 200, latestSample || { timestamp: Date.now(), isoTime: new Date().toISOString() });
+    return sendJson(res, 200, latestSample || { timestamp: Date.now(), isoTime: new Date().toISOString() }, {}, req);
   }
 
   if (pathname === '/api/weixin/status') {
-    return sendJson(res, 200, await getCombinedWeixinStatus());
+    return sendJson(res, 200, await getCombinedWeixinStatus(), {}, req);
   }
 
   if (pathname === '/api/weixin/qr/start') {
@@ -1055,7 +1131,7 @@ async function handleApi(req, res, pathname, searchParams) {
   }
 
   if (pathname === '/api/weixin/peers') {
-    return sendJson(res, 200, { peers: await getWeixinPeers() });
+    return sendJson(res, 200, { peers: await getWeixinPeers() }, {}, req);
   }
 
   if (pathname === '/api/weixin/peers/alias') {
@@ -1078,7 +1154,7 @@ async function handleApi(req, res, pathname, searchParams) {
     const hours = Number(searchParams.get('hours') || '24');
     const clampedHours = Math.max(1 / 6, Math.min(24 * 7, hours));
     const samples = await readSamples(clampedHours * 60 * 60 * 1000);
-    return sendJson(res, 200, buildMetricsPayload(samples, clampedHours));
+    return sendJson(res, 200, buildMetricsPayload(samples, clampedHours), {}, req);
   }
 
   if (pathname.startsWith('/api/actions/')) {
@@ -1141,9 +1217,9 @@ const server = http.createServer(async (req, res) => {
       return await handleApi(req, res, url.pathname, url.searchParams);
     }
     if (url.pathname === '/weixin' || url.pathname === '/weixin/') {
-      return await serveStatic(res, '/weixin.html');
+      return await serveStatic(req, res, '/weixin.html');
     }
-    return await serveStatic(res, url.pathname);
+    return await serveStatic(req, res, url.pathname);
   } catch (err) {
     const status = err.statusCode || 500;
     return sendJson(res, status, { error: err.message || 'Internal server error' });
