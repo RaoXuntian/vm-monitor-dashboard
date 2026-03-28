@@ -112,7 +112,7 @@ function render() {
 
   renderNodeInfo(payload.node);
   renderTcpPorts(tcpConnections.byPort || []);
-  renderAlerts(payload.alerts || []);
+  renderAlerts(payload.alerts || [], payload.serviceHealth || []);
   renderProcesses(payload.topProcesses || []);
   renderMounts(payload.mounts || []);
   renderServices(services);
@@ -126,7 +126,10 @@ function render() {
     { key: 'memoryUsagePercent', color: '#c28cff', gradientId: 'memoryGradient', fillFrom: 'rgba(194,140,255,0.38)', fillTo: 'rgba(194,140,255,0.02)', label: 'Memory' },
   ], { yMin: 0, yMax: 100, ySuffix: '%' });
 
-  const networkMax = Math.max(1, ...series.flatMap((point) => [point.networkRxRateBps || 0, point.networkTxRateBps || 0]));
+  const allNetRates = series.flatMap((point) => [point.networkRxRateBps || 0, point.networkTxRateBps || 0]).filter((v) => v > 0).sort((a, b) => a - b);
+  const p95Index = Math.min(allNetRates.length - 1, Math.floor(allNetRates.length * 0.95));
+  const p95 = allNetRates.length > 0 ? allNetRates[p95Index] : 1;
+  const networkMax = Math.max(1, p95 * 1.3);
   renderLineChart('chart-network', series, [
     { key: 'networkRxRateBps', color: '#63e2c6', gradientId: 'rxGradient', fillFrom: 'rgba(99,226,198,0.36)', fillTo: 'rgba(99,226,198,0.02)', label: 'Inbound' },
     { key: 'networkTxRateBps', color: '#f6c760', gradientId: 'txGradient', fillFrom: 'rgba(246,199,96,0.26)', fillTo: 'rgba(246,199,96,0.02)', label: 'Outbound' },
@@ -152,14 +155,30 @@ function renderTcpPorts(byPort) {
     : '<div class="muted">No established TCP connections</div>';
 }
 
-function renderAlerts(alerts) {
+function renderAlerts(alerts, serviceHealth) {
   const el = $('alert-list');
-  el.innerHTML = alerts.map((alert) => `
-    <div class="alert-item ${alert.level}">
-      <strong>${alert.level === 'healthy' ? 'Healthy' : 'Alert'}</strong>
-      <span>${escapeHtml(alert.message)}</span>
-    </div>
-  `).join('');
+  const rows = [];
+
+  // Capacity / gateway / weixin alerts from backend
+  for (const alert of alerts) {
+    if (alert.level === 'healthy') continue; // skip generic healthy, we'll add per-service below
+    rows.push(`<div class="alert-item ${alert.level}"><strong>Alert</strong><span>${escapeHtml(alert.message)}</span></div>`);
+  }
+
+  // Per-service health rows
+  if (Array.isArray(serviceHealth)) {
+    for (const svc of serviceHealth) {
+      const level = svc.active ? 'healthy' : 'critical';
+      const label = svc.active ? '● Online' : '✕ DOWN';
+      rows.push(`<div class="alert-item ${level}"><strong>${escapeHtml(svc.name)}</strong><span>${label}</span></div>`);
+    }
+  }
+
+  if (!rows.length) {
+    rows.push(`<div class="alert-item healthy"><strong>Healthy</strong><span>All systems operational</span></div>`);
+  }
+
+  el.innerHTML = rows.join('');
 }
 
 function badgeClassForGateway(services) {
