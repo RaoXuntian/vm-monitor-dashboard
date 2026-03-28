@@ -5,464 +5,419 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WeChat Management</title>
   <link rel="stylesheet" href="/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
   <style>
     :root {
-      color-scheme: dark light;
-      --page-bg: #0a0a0f;
-      --page-bg-soft: rgba(15, 23, 42, 0.8);
-      --page-border: rgba(148, 163, 184, 0.16);
-      --page-shadow: 0 24px 60px rgba(0, 0, 0, 0.34);
+      color-scheme: dark;
+      --page-max: 960px;
+      --surface: rgba(15, 23, 42, 0.74);
+      --surface-strong: rgba(15, 23, 42, 0.88);
+      --surface-soft: rgba(255, 255, 255, 0.04);
+      --border: rgba(148, 163, 184, 0.16);
+      --border-strong: rgba(129, 140, 248, 0.28);
       --text-primary: #eef2ff;
-      --text-secondary: #c7d2fe;
-      --text-muted: #a5b4d4;
-      --success-strong: #6ee7b7;
-      --success-soft: rgba(16, 185, 129, 0.18);
-      --danger-strong: #fda4af;
-      --danger-soft: rgba(244, 63, 94, 0.18);
-      --warning-strong: #fcd34d;
-      --warning-soft: rgba(245, 158, 11, 0.18);
-      --focus-ring: rgba(129, 140, 248, 0.45);
-      --button-disabled: rgba(255, 255, 255, 0.08);
-      --button-active: linear-gradient(135deg, rgba(99, 102, 241, 0.3), rgba(139, 92, 246, 0.24));
-      --button-border: rgba(129, 140, 248, 0.36);
-    }
-
-    @media (prefers-color-scheme: light) {
-      :root {
-        --page-bg: #eef2ff;
-        --page-bg-soft: rgba(255, 255, 255, 0.82);
-        --page-border: rgba(99, 102, 241, 0.12);
-        --page-shadow: 0 24px 60px rgba(99, 102, 241, 0.12);
-        --text-primary: #111827;
-        --text-secondary: #312e81;
-        --text-muted: #475569;
-        --success-strong: #047857;
-        --success-soft: rgba(16, 185, 129, 0.12);
-        --danger-strong: #be123c;
-        --danger-soft: rgba(244, 63, 94, 0.12);
-        --warning-strong: #b45309;
-        --warning-soft: rgba(245, 158, 11, 0.12);
-        --focus-ring: rgba(79, 70, 229, 0.25);
-        --button-disabled: rgba(15, 23, 42, 0.08);
-        --button-active: linear-gradient(135deg, rgba(79, 70, 229, 0.16), rgba(124, 58, 237, 0.14));
-        --button-border: rgba(79, 70, 229, 0.18);
-      }
+      --text-secondary: #cbd5f5;
+      --text-muted: #94a3b8;
+      --accent: #8b5cf6;
+      --accent-strong: #a78bfa;
+      --success: #34d399;
+      --success-soft: rgba(52, 211, 153, 0.16);
+      --warning: #fbbf24;
+      --warning-soft: rgba(251, 191, 36, 0.16);
+      --danger: #fb7185;
+      --danger-soft: rgba(251, 113, 133, 0.16);
+      --shadow: 0 24px 70px rgba(2, 6, 23, 0.38);
+      --radius-xl: 28px;
+      --radius-lg: 20px;
+      --radius-md: 16px;
+      --focus-ring: 0 0 0 4px rgba(129, 140, 248, 0.22);
+      --transition-fast: 160ms ease;
+      --transition-base: 240ms ease;
     }
 
     * { box-sizing: border-box; }
-
-    html, body {
-      margin: 0;
-      min-height: 100%;
-      background:
-        radial-gradient(circle at top left, rgba(99, 102, 241, 0.18), transparent 24%),
-        radial-gradient(circle at bottom right, rgba(139, 92, 246, 0.15), transparent 24%),
-        var(--page-bg);
-      color: var(--text-primary);
-    }
+    html, body { min-height: 100%; margin: 0; }
 
     body {
-      padding: 20px;
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      color: var(--text-primary);
+      background:
+        radial-gradient(circle at top left, rgba(99, 102, 241, 0.16), transparent 22%),
+        radial-gradient(circle at bottom right, rgba(168, 85, 247, 0.14), transparent 24%),
+        #020617;
+      padding: 24px 16px 48px;
     }
 
-    a, button, input {
-      font: inherit;
-    }
+    a, button { font: inherit; }
+    h1, h2, h3, p { margin: 0; }
 
     .page-shell {
-      max-width: 1180px;
+      width: min(100%, var(--page-max));
       margin: 0 auto;
       display: grid;
-      gap: 16px;
+      gap: 18px;
     }
 
     .glass-card {
-      background: var(--page-bg-soft);
-      border: 1px solid var(--page-border);
-      border-radius: 28px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
       backdrop-filter: blur(18px);
-      box-shadow: var(--page-shadow);
+      box-shadow: var(--shadow);
     }
 
-    .header-card,
-    .summary-card,
-    .accounts-card,
-    .qr-card {
-      padding: 20px;
+    .page-header,
+    .status-card,
+    .link-card { padding: 22px; }
+
+    .page-header {
+      display: grid;
+      gap: 18px;
     }
 
     .back-link {
+      width: fit-content;
       min-height: 44px;
       display: inline-flex;
       align-items: center;
       gap: 10px;
-      padding: 10px 14px;
-      border-radius: 16px;
-      text-decoration: none;
       color: var(--text-secondary);
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      width: fit-content;
-      transition: transform 180ms ease, background 180ms ease, border-color 180ms ease;
+      text-decoration: none;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04);
+      transition: transform var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
     }
 
     .back-link:hover { transform: translateY(-1px); }
-
-    .header-row {
-      display: grid;
-      gap: 16px;
-      margin-top: 14px;
-    }
-
     .eyebrow {
       color: var(--text-muted);
       text-transform: uppercase;
       letter-spacing: 0.08em;
-      font-size: 0.78rem;
+      font-size: 0.76rem;
+      margin-bottom: 8px;
     }
 
-    h1, h2, h3, p { margin: 0; }
-
     h1 {
-      font-size: clamp(1.9rem, 6vw, 2.8rem);
-      line-height: 1.05;
-      margin-top: 8px;
+      font-size: clamp(2rem, 5vw, 2.8rem);
+      line-height: 1.02;
+      margin-bottom: 10px;
     }
 
     .lead {
       color: var(--text-secondary);
-      line-height: 1.6;
-      max-width: 66ch;
-      margin-top: 10px;
+      line-height: 1.65;
+      max-width: 62ch;
     }
 
-    .bento-grid {
+    .panel-grid {
       display: grid;
-      gap: 16px;
+      gap: 18px;
       grid-template-columns: 1fr;
     }
 
-    .summary-grid,
-    .accounts-grid {
-      display: grid;
-      gap: 12px;
-      grid-template-columns: 1fr;
-    }
-
-    .metric-box,
-    .account-item,
-    .qr-stage,
-    .helper-banner {
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      background: rgba(255, 255, 255, 0.04);
-      border-radius: 20px;
-    }
-
-    .metric-box {
-      padding: 16px;
-      min-height: 116px;
-      display: grid;
-      gap: 8px;
-      align-content: start;
-    }
-
-    .metric-label,
-    .helper-text,
-    .account-note,
-    .field-help,
-    .status-detail,
-    .empty-state {
-      color: var(--text-muted);
-      line-height: 1.5;
-    }
-
-    .metric-value {
-      font-size: 1.3rem;
-      font-weight: 700;
-      color: var(--text-primary);
-    }
-
-    .summary-state {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .section-title {
-      margin-bottom: 14px;
-      font-size: 1.05rem;
-    }
-
-    .account-item {
-      padding: 16px;
-      display: grid;
-      gap: 12px;
-      min-height: 132px;
-    }
-
-    .account-top {
+    .section-head {
       display: flex;
+      align-items: center;
       justify-content: space-between;
-      align-items: flex-start;
       gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .section-title { font-size: 1.08rem; }
+
+    .summary-banner {
+      border-radius: var(--radius-lg);
+      padding: 16px 18px;
+      border: 1px solid var(--border);
+      background: var(--surface-soft);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+      color: var(--text-secondary);
+    }
+
+    .summary-banner.success {
+      color: var(--success);
+      background: var(--success-soft);
+      border-color: rgba(52, 211, 153, 0.28);
+    }
+
+    .summary-banner.warning {
+      color: var(--warning);
+      background: var(--warning-soft);
+      border-color: rgba(251, 191, 36, 0.28);
+    }
+
+    .account-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .account-chip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      flex-wrap: wrap;
+      padding: 14px 16px;
+      border-radius: var(--radius-lg);
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .account-meta {
+      min-width: 0;
+      display: grid;
+      gap: 4px;
     }
 
     .account-id {
       font-weight: 700;
       word-break: break-word;
-      line-height: 1.4;
     }
 
-    .status-chip {
+    .account-note {
+      color: var(--text-muted);
+      font-size: 0.94rem;
+      line-height: 1.45;
+    }
+
+    .status-pill {
       min-height: 44px;
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      padding: 10px 12px;
+      gap: 10px;
+      padding: 10px 14px;
       border-radius: 999px;
       font-weight: 700;
-      white-space: nowrap;
       border: 1px solid transparent;
+      white-space: nowrap;
     }
 
-    .status-chip svg {
-      width: 18px;
-      height: 18px;
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
       flex: 0 0 auto;
     }
 
-    .status-chip.ok {
-      color: var(--success-strong);
+    .status-pill.online {
+      color: var(--success);
       background: var(--success-soft);
-      border-color: rgba(16, 185, 129, 0.24);
+      border-color: rgba(52, 211, 153, 0.28);
     }
 
-    .status-chip.error {
-      color: var(--danger-strong);
+    .status-pill.online .status-dot { background: currentColor; }
+
+    .status-pill.offline,
+    .status-pill.error {
+      color: var(--danger);
       background: var(--danger-soft);
-      border-color: rgba(244, 63, 94, 0.24);
+      border-color: rgba(251, 113, 133, 0.28);
     }
 
-    .status-chip.warn {
-      color: var(--warning-strong);
+    .status-pill.offline .status-dot,
+    .status-pill.error .status-dot { background: currentColor; }
+
+    .status-pill.pending,
+    .status-pill.warning {
+      color: var(--warning);
       background: var(--warning-soft);
-      border-color: rgba(245, 158, 11, 0.24);
+      border-color: rgba(251, 191, 36, 0.28);
     }
 
-    .empty-state {
-      padding: 20px;
+    .status-pill.pending .status-dot,
+    .status-pill.warning .status-dot { background: currentColor; }
+
+    .muted-copy {
+      color: var(--text-muted);
+      line-height: 1.6;
     }
 
-    .field-group {
-      display: grid;
-      gap: 8px;
-      margin-top: 14px;
-    }
-
-    label {
-      font-weight: 600;
-      color: var(--text-secondary);
-    }
-
-    .input-row {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .password-input {
-      min-height: 48px;
-      width: 100%;
-      border-radius: 16px;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      background: rgba(255, 255, 255, 0.04);
-      color: var(--text-primary);
-      padding: 12px 16px;
-      transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
-    }
-
-    .password-input::placeholder { color: var(--text-muted); }
-
-    .password-input:focus-visible,
-    .action-button:focus-visible,
-    .back-link:focus-visible,
-    .retry-button:focus-visible {
-      outline: none;
-      box-shadow: 0 0 0 4px var(--focus-ring);
-      border-color: rgba(129, 140, 248, 0.55);
-    }
-
-    .password-input.shake {
-      animation: shakeX 260ms ease;
-      border-color: rgba(244, 63, 94, 0.6);
-    }
-
-    .action-button,
-    .retry-button {
-      min-height: 48px;
+    .primary-button,
+    .secondary-button,
+    .ghost-button {
       min-width: 44px;
+      min-height: 44px;
+      border: 0;
+      border-radius: var(--radius-md);
+      padding: 12px 18px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 10px;
-      padding: 12px 18px;
-      border-radius: 16px;
-      border: 1px solid var(--button-border);
-      background: var(--button-disabled);
-      color: var(--text-muted);
-      cursor: not-allowed;
-      touch-action: manipulation;
-      transition: transform 180ms ease, opacity 180ms ease, background 180ms ease, color 180ms ease, border-color 180ms ease;
-    }
-
-    .action-button.is-ready,
-    .retry-button {
-      background: var(--button-active);
-      color: var(--text-primary);
       cursor: pointer;
+      touch-action: manipulation;
+      transition: transform var(--transition-fast), opacity var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast);
     }
 
-    .action-button.is-loading {
+    .primary-button {
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.86), rgba(139, 92, 246, 0.86));
+      color: white;
+      box-shadow: 0 16px 32px rgba(99, 102, 241, 0.24);
+    }
+
+    .primary-button:hover:not(:disabled),
+    .secondary-button:hover,
+    .ghost-button:hover { transform: translateY(-1px); }
+
+    .secondary-button {
+      background: rgba(255,255,255,0.08);
+      color: var(--text-primary);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .ghost-button {
+      background: transparent;
+      color: var(--text-secondary);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .primary-button:disabled {
+      opacity: 0.72;
       cursor: wait;
-    }
-
-    .action-button:hover:is(.is-ready, .is-loading),
-    .retry-button:hover {
-      transform: translateY(-1px);
+      transform: none;
     }
 
     .button-spinner {
       width: 18px;
       height: 18px;
       border-radius: 999px;
-      border: 2px solid rgba(255, 255, 255, 0.24);
-      border-top-color: currentColor;
-      animation: spin 800ms linear infinite;
+      border: 2px solid rgba(255,255,255,0.28);
+      border-top-color: white;
+      animation: spin 900ms linear infinite;
     }
 
-    .button-spinner.hidden,
-    .hidden {
-      display: none !important;
-    }
-
-    .field-error {
-      min-height: 22px;
-      color: var(--danger-strong);
-      font-weight: 600;
-    }
-
-    .helper-banner {
-      margin-top: 14px;
-      padding: 14px 16px;
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      color: var(--text-secondary);
-    }
-
-    .qr-panel {
+    .qr-shell {
       margin-top: 18px;
       display: grid;
-      gap: 14px;
+      gap: 16px;
     }
 
-    .qr-stage {
-      padding: 16px;
-      display: grid;
-      justify-items: center;
-      gap: 14px;
-      opacity: 0;
-      transform: translateY(12px) scale(0.98);
-      pointer-events: none;
-      transition: opacity 220ms ease, transform 220ms ease;
-    }
-
-    .qr-stage.visible {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-      pointer-events: auto;
-    }
-
-    .qr-image-wrap {
+    .qr-frame {
+      position: relative;
       width: min(100%, 320px);
       aspect-ratio: 1;
-      border-radius: 22px;
-      padding: 14px;
-      background: #ffffff;
+      margin: 0 auto;
+      padding: 16px;
+      border-radius: 24px;
+      background: white;
+      box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06);
       display: grid;
       place-items: center;
-      box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+      overflow: hidden;
     }
 
-    .qr-image {
+    #qr-canvas {
       width: 100%;
       height: auto;
       display: block;
-      border-radius: 12px;
+      border-radius: 14px;
     }
 
-    .qr-status {
-      width: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
+    .qr-overlay {
+      position: absolute;
+      inset: 0;
+      display: none;
+      align-content: center;
+      justify-items: center;
+      gap: 14px;
+      padding: 18px;
+      background: rgba(2, 6, 23, 0.6);
+      color: white;
       text-align: center;
-      line-height: 1.5;
-      font-weight: 700;
-      color: var(--text-secondary);
+      opacity: 0;
+      transition: opacity var(--transition-base);
     }
 
-    .qr-status svg {
-      width: 20px;
-      height: 20px;
-      flex: 0 0 auto;
+    .qr-overlay.visible {
+      display: grid;
+      opacity: 1;
     }
 
-    .qr-status.waiting { color: var(--text-secondary); }
-    .qr-status.scanned {
-      color: var(--warning-strong);
-      animation: pulseGlow 1.4s ease-in-out infinite;
-    }
-    .qr-status.confirmed { color: var(--success-strong); }
-    .qr-status.expired,
-    .qr-status.error { color: var(--danger-strong); }
-
-    .status-row {
+    .qr-status-block {
       display: grid;
       gap: 8px;
       justify-items: center;
-    }
-
-    .success-badge {
-      width: 52px;
-      height: 52px;
-      border-radius: 999px;
-      display: grid;
-      place-items: center;
-      color: var(--success-strong);
-      background: var(--success-soft);
-      border: 1px solid rgba(16, 185, 129, 0.24);
-      transform: scale(0.9);
-      opacity: 0;
-    }
-
-    .success-badge.visible {
-      opacity: 1;
-      transform: scale(1);
-      transition: opacity 180ms ease, transform 180ms ease;
-    }
-
-    .status-detail {
       text-align: center;
-      max-width: 42ch;
     }
 
-    .retry-row {
-      display: flex;
+    .qr-state-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      line-height: 1.5;
+    }
+
+    .qr-state-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: currentColor;
+      flex: 0 0 auto;
+    }
+
+    .qr-state-label.waiting { color: var(--text-secondary); }
+    .qr-state-label.scanned { color: var(--warning); }
+    .qr-state-label.connected { color: var(--success); }
+    .qr-state-label.expired,
+    .qr-state-label.error { color: var(--danger); }
+
+    .linked-account {
+      color: var(--text-secondary);
+      font-size: 0.94rem;
+    }
+
+    .empty-state {
+      border-radius: var(--radius-lg);
+      padding: 18px;
+      color: var(--text-muted);
+      background: rgba(255,255,255,0.03);
+      border: 1px dashed rgba(255,255,255,0.12);
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
       justify-content: center;
+      padding: 20px;
+      background: rgba(2, 6, 23, 0.7);
+      opacity: 0;
+      transition: opacity var(--transition-base);
+      z-index: 20;
+    }
+
+    .modal-backdrop.open {
+      display: flex;
+      opacity: 1;
+    }
+
+    .modal-dialog {
+      width: min(100%, 520px);
+      border-radius: 24px;
+      padding: 24px;
+      background: var(--surface-strong);
+      border: 1px solid var(--border-strong);
+      box-shadow: var(--shadow);
+      transform: translateY(10px);
+      transition: transform var(--transition-base);
+    }
+
+    .modal-backdrop.open .modal-dialog { transform: translateY(0); }
+
+    .modal-copy { color: var(--text-secondary); line-height: 1.6; margin-top: 10px; }
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 20px;
     }
 
     .sr-only {
@@ -477,50 +432,19 @@
       border: 0;
     }
 
-    @keyframes spin {
-      to { transform: rotate(360deg); }
+    :focus-visible {
+      outline: none;
+      box-shadow: var(--focus-ring);
     }
 
-    @keyframes pulseGlow {
-      0%, 100% { transform: scale(1); opacity: 1; }
-      50% { transform: scale(1.03); opacity: 0.9; }
-    }
+    .hidden { display: none !important; }
 
-    @keyframes shakeX {
-      0%, 100% { transform: translateX(0); }
-      20% { transform: translateX(-6px); }
-      40% { transform: translateX(6px); }
-      60% { transform: translateX(-4px); }
-      80% { transform: translateX(4px); }
-    }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
-    @media (min-width: 760px) {
-      body { padding: 28px; }
-      .header-card,
-      .summary-card,
-      .accounts-card,
-      .qr-card { padding: 24px; }
-      .bento-grid {
-        grid-template-columns: minmax(0, 1.1fr) minmax(340px, 0.9fr);
-        align-items: start;
-      }
-      .summary-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-      }
-      .accounts-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-      .input-row {
-        flex-direction: row;
-        align-items: end;
-      }
-      .input-row .field-group {
-        flex: 1 1 auto;
-      }
-      .action-button {
-        flex: 0 0 auto;
-        min-width: 190px;
-      }
+    @media (min-width: 860px) {
+      body { padding: 28px 20px 56px; }
+      .panel-grid { grid-template-columns: 1.05fr 0.95fr; align-items: start; }
+      .page-header, .status-card, .link-card { padding: 26px; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -530,139 +454,121 @@
         transition-duration: 1ms !important;
         scroll-behavior: auto !important;
       }
-      .qr-status.scanned { animation: none; }
     }
   </style>
 </head>
 <body>
-  <main class="page-shell" id="main-content">
-    <section class="glass-card header-card">
-      <a class="back-link" href="/" aria-label="Back to main dashboard">
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <main class="page-shell">
+    <section class="glass-card page-header">
+      <a class="back-link" href="/" aria-label="Back to dashboard">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
         </svg>
         <span>Back to dashboard</span>
       </a>
-      <div class="header-row">
-        <div>
-          <div class="eyebrow">OpenClaw channel administration</div>
-          <h1>WeChat Management</h1>
-          <p class="lead">Monitor current Weixin channel health, review connected accounts, and generate a binding QR code for a new OpenClaw WeChat user.</p>
-        </div>
+      <div>
+        <div class="eyebrow">OpenClaw · Weixin channel</div>
+        <h1>WeChat Management</h1>
+        <p class="lead">Check current account connectivity and generate a fresh login QR code through the OpenClaw gateway when you need to link or relink a WeChat account.</p>
       </div>
     </section>
 
-    <section class="bento-grid">
-      <div class="glass-card summary-card">
-        <h2 class="section-title">Channel Status</h2>
-        <div class="summary-grid">
-          <article class="metric-box">
-            <div class="metric-label">Channel enabled</div>
-            <div class="metric-value" id="channel-enabled">Loading…</div>
-            <div class="helper-text">Whether the Weixin channel is currently turned on.</div>
-          </article>
-          <article class="metric-box">
-            <div class="metric-label">Channel state</div>
-            <div class="metric-value summary-state" id="channel-state-wrap">
-              <span id="channel-state">Loading…</span>
-            </div>
-            <div class="helper-text">Live status reported by OpenClaw.</div>
-          </article>
-          <article class="metric-box">
-            <div class="metric-label">Connected accounts</div>
-            <div class="metric-value" id="account-count">0</div>
-            <div class="helper-text">Known Weixin accounts exposed by the monitor.</div>
-          </article>
+    <section class="panel-grid">
+      <section class="glass-card status-card" aria-labelledby="status-heading">
+        <div class="section-head">
+          <h2 class="section-title" id="status-heading">Account Status</h2>
         </div>
-      </div>
+        <div id="summary-banner" class="summary-banner">
+          <span id="summary-text">Loading account status…</span>
+        </div>
+        <div id="account-list" class="account-list">
+          <div class="empty-state">Loading known accounts…</div>
+        </div>
+      </section>
 
-      <div class="glass-card qr-card">
-        <h2 class="section-title">Generate QR Code</h2>
-        <p class="helper-text">QR generation is protected by the admin password. Viewing this page does not require authentication.</p>
+      <section class="glass-card link-card" aria-labelledby="link-heading">
+        <div class="section-head">
+          <h2 class="section-title" id="link-heading">Link a WeChat Account</h2>
+        </div>
+        <p class="muted-copy">Generate a new QR code through the local gateway. After scanning, confirm the login on the phone to finish linking.</p>
 
-        <div class="input-row">
-          <div class="field-group">
-            <label for="password-input">Admin password</label>
-            <input
-              id="password-input"
-              class="password-input"
-              type="password"
-              placeholder="Enter admin password"
-              autocomplete="current-password"
-              aria-describedby="password-help password-error"
-            >
-            <div class="field-help" id="password-help">Enter the password to request a new Weixin binding QR code.</div>
-            <div class="field-error" id="password-error" role="alert" aria-live="polite"></div>
-          </div>
-
-          <button id="generate-button" class="action-button" type="button" disabled aria-disabled="true">
-            <span id="generate-spinner" class="button-spinner hidden" aria-hidden="true"></span>
-            <span id="generate-label">Generate QR Code</span>
+        <div style="margin-top: 18px;">
+          <button id="link-button" class="primary-button" type="button">
+            <span id="link-spinner" class="button-spinner hidden" aria-hidden="true"></span>
+            <span id="link-label">🔗 Link New WeChat Account</span>
           </button>
         </div>
 
-        <div class="helper-banner" id="qr-hint-banner">
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" width="18" height="18">
-            <path d="M12 8v5m0 4h.01M22 12a10 10 0 11-20 0 10 10 0 0120 0z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span>Generate a QR code, then ask the new user to scan it in WeChat and confirm on their phone.</span>
-        </div>
-
-        <div class="qr-panel" id="qr-panel" aria-live="polite">
-          <div class="qr-stage hidden" id="qr-stage">
-            <div class="qr-image-wrap">
-              <img id="qr-image" class="qr-image" alt="Weixin account binding QR code">
-            </div>
-            <div class="status-row">
-              <div id="success-badge" class="success-badge" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none">
-                  <path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-              </div>
-              <div class="qr-status waiting" id="qr-status"></div>
-              <div class="status-detail" id="qr-detail">Waiting for scan…</div>
-            </div>
-            <div class="retry-row hidden" id="retry-row">
-              <button id="retry-button" class="retry-button" type="button">Generate a fresh QR code</button>
+        <div class="qr-shell" id="qr-shell">
+          <div class="qr-frame hidden" id="qr-frame">
+            <canvas id="qr-canvas" aria-label="WeChat login QR code"></canvas>
+            <div id="qr-overlay" class="qr-overlay" aria-hidden="true">
+              <div>QR code expired</div>
+              <button id="overlay-refresh-button" class="secondary-button" type="button">Click to refresh</button>
             </div>
           </div>
-        </div>
-      </div>
-    </section>
 
-    <section class="glass-card accounts-card">
-      <h2 class="section-title">Connected Accounts</h2>
-      <div class="accounts-grid" id="accounts-grid"></div>
+          <div class="qr-status-block hidden" id="qr-status-block">
+            <div id="qr-state-label" class="qr-state-label waiting">
+              <span class="qr-state-dot" aria-hidden="true"></span>
+              <span id="qr-state-text">Waiting for scan…</span>
+            </div>
+            <div id="qr-state-detail" class="muted-copy">Generate a QR code to start linking.</div>
+            <div id="linked-account" class="linked-account hidden"></div>
+          </div>
+        </div>
+
+        <div id="status-live" class="sr-only" aria-live="polite"></div>
+      </section>
     </section>
   </main>
 
+  <div id="modal-backdrop" class="modal-backdrop" hidden>
+    <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-copy">
+      <h2 id="modal-title">Confirm Account Linking</h2>
+      <p id="modal-copy" class="modal-copy">This will generate a new QR code. If an account is already connected, it may be replaced.</p>
+      <div class="modal-actions">
+        <button id="modal-cancel" class="ghost-button" type="button">Cancel</button>
+        <button id="modal-confirm" class="primary-button" type="button">
+          <span id="modal-spinner" class="button-spinner hidden" aria-hidden="true"></span>
+          <span id="modal-confirm-label">Generate QR Code</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script>
-    const icons = {
-      ok: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-      error: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 8v4m0 4h.01M22 12a10 10 0 11-20 0 10 10 0 0120 0z" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-      wait: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 6v6l4 2" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 12a10 10 0 11-20 0 10 10 0 0120 0z" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-      scan: '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7V5a1 1 0 011-1h2M20 7V5a1 1 0 00-1-1h-2M4 17v2a1 1 0 001 1h2M20 17v2a1 1 0 01-1 1h-2M8 12h8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    const state = {
+      accounts: [],
+      modalOpen: false,
+      lastTrigger: null,
+      loadingQr: false,
+      currentSession: null,
+      pollAbort: false,
+      accountStatusMap: new Map(),
     };
 
-    const channelEnabledEl = document.getElementById('channel-enabled');
-    const channelStateEl = document.getElementById('channel-state');
-    const accountCountEl = document.getElementById('account-count');
-    const accountsGridEl = document.getElementById('accounts-grid');
-    const passwordInputEl = document.getElementById('password-input');
-    const passwordErrorEl = document.getElementById('password-error');
-    const generateButtonEl = document.getElementById('generate-button');
-    const generateLabelEl = document.getElementById('generate-label');
-    const generateSpinnerEl = document.getElementById('generate-spinner');
-    const qrStageEl = document.getElementById('qr-stage');
-    const qrImageEl = document.getElementById('qr-image');
-    const qrStatusEl = document.getElementById('qr-status');
-    const qrDetailEl = document.getElementById('qr-detail');
-    const retryRowEl = document.getElementById('retry-row');
-    const retryButtonEl = document.getElementById('retry-button');
-    const successBadgeEl = document.getElementById('success-badge');
-
-    let qrPollTimer = null;
-    let activeSessionId = null;
+    const linkButton = document.getElementById('link-button');
+    const linkLabel = document.getElementById('link-label');
+    const linkSpinner = document.getElementById('link-spinner');
+    const summaryBanner = document.getElementById('summary-banner');
+    const summaryText = document.getElementById('summary-text');
+    const accountList = document.getElementById('account-list');
+    const qrFrame = document.getElementById('qr-frame');
+    const qrCanvas = document.getElementById('qr-canvas');
+    const qrStatusBlock = document.getElementById('qr-status-block');
+    const qrStateLabel = document.getElementById('qr-state-label');
+    const qrStateText = document.getElementById('qr-state-text');
+    const qrStateDetail = document.getElementById('qr-state-detail');
+    const linkedAccount = document.getElementById('linked-account');
+    const qrOverlay = document.getElementById('qr-overlay');
+    const overlayRefreshButton = document.getElementById('overlay-refresh-button');
+    const liveRegion = document.getElementById('status-live');
+    const modalBackdrop = document.getElementById('modal-backdrop');
+    const modalCancel = document.getElementById('modal-cancel');
+    const modalConfirm = document.getElementById('modal-confirm');
+    const modalSpinner = document.getElementById('modal-spinner');
+    const modalConfirmLabel = document.getElementById('modal-confirm-label');
 
     function escapeHtml(value) {
       return String(value || '')
@@ -673,220 +579,255 @@
         .replace(/'/g, '&#39;');
     }
 
-    function clearQrPolling() {
-      if (qrPollTimer) {
-        clearInterval(qrPollTimer);
-        qrPollTimer = null;
-      }
+    function announce(message) {
+      liveRegion.textContent = message;
     }
 
-    function statusTone(status) {
-      const normalized = String(status || '').toUpperCase();
-      if (['OK', 'CONNECTED', 'ONLINE', 'ACTIVE'].includes(normalized)) return 'ok';
-      if (['WARN', 'WAIT', 'PENDING', 'SCANNED', 'SCANED'].includes(normalized)) return 'warn';
-      return 'error';
+    function setPrimaryLoading(isLoading) {
+      state.loadingQr = isLoading;
+      linkButton.disabled = isLoading;
+      modalConfirm.disabled = isLoading;
+      linkSpinner.classList.toggle('hidden', !isLoading);
+      modalSpinner.classList.toggle('hidden', !isLoading);
+      modalConfirmLabel.textContent = isLoading ? 'Generating…' : 'Generate QR Code';
+      linkLabel.textContent = isLoading
+        ? 'Generating QR Code…'
+        : (hasOfflineAccounts() ? 'Refresh Login' : '🔗 Link New WeChat Account');
     }
 
-    function renderChip(status) {
-      const tone = statusTone(status);
-      const icon = tone === 'ok' ? icons.ok : tone === 'warn' ? icons.wait : icons.error;
-      return `<span class="status-chip ${tone}">${icon}<span>${escapeHtml(status || 'UNKNOWN')}</span></span>`;
+    function normalizeAccountTone(rawStatus) {
+      const value = String(rawStatus || '').toUpperCase();
+      if (['OK', 'CONNECTED', 'ONLINE', 'ACTIVE'].includes(value)) return 'online';
+      if (['WARN', 'PENDING', 'WAITING', 'SCANED', 'SCANNED'].includes(value)) return 'warning';
+      if (['OFFLINE', 'ERROR', 'FAILED'].includes(value)) return 'offline';
+      return 'offline';
     }
 
-    function setGenerateButtonState() {
-      const hasPassword = passwordInputEl.value.trim().length > 0;
-      const isLoading = generateButtonEl.dataset.loading === 'true';
-      generateButtonEl.disabled = !hasPassword || isLoading;
-      generateButtonEl.setAttribute('aria-disabled', String(!hasPassword || isLoading));
-      generateButtonEl.classList.toggle('is-ready', hasPassword && !isLoading);
-      generateButtonEl.classList.toggle('is-loading', isLoading);
+    function formatAccountText(rawStatus) {
+      const tone = normalizeAccountTone(rawStatus);
+      if (tone === 'online') return 'Online';
+      if (tone === 'warning') return 'Needs attention';
+      return 'Offline';
     }
 
-    function setLoadingState(isLoading) {
-      generateButtonEl.dataset.loading = isLoading ? 'true' : 'false';
-      generateSpinnerEl.classList.toggle('hidden', !isLoading);
-      generateLabelEl.textContent = isLoading ? 'Generating...' : 'Generate QR Code';
-      setGenerateButtonState();
+    function hasOfflineAccounts() {
+      return state.accounts.some((item) => normalizeAccountTone(item.status) !== 'online');
     }
 
-    function showPasswordError(message) {
-      passwordErrorEl.textContent = message;
-      passwordInputEl.classList.remove('shake');
-      void passwordInputEl.offsetWidth;
-      passwordInputEl.classList.add('shake');
-      passwordInputEl.focus();
-    }
-
-    function clearPasswordError() {
-      passwordErrorEl.textContent = '';
-      passwordInputEl.classList.remove('shake');
-    }
-
-    function showQrStage() {
-      qrStageEl.classList.remove('hidden');
-      requestAnimationFrame(() => qrStageEl.classList.add('visible'));
-    }
-
-    function resetQrState() {
-      clearQrPolling();
-      activeSessionId = null;
-      qrStageEl.classList.remove('visible');
-      qrStageEl.classList.add('hidden');
-      retryRowEl.classList.add('hidden');
-      successBadgeEl.classList.remove('visible');
-      qrImageEl.removeAttribute('src');
-      qrStatusEl.className = 'qr-status waiting';
-      qrStatusEl.innerHTML = `${icons.wait}<span>Waiting for scan...</span>`;
-      qrDetailEl.textContent = 'Waiting for scan…';
-    }
-
-    function updateQrStatus(state, message, detail) {
-      const map = {
-        waiting: icons.wait,
-        scanned: icons.scan,
-        confirmed: icons.ok,
-        expired: icons.error,
-        error: icons.error,
-      };
-      qrStatusEl.className = `qr-status ${state}`;
-      qrStatusEl.innerHTML = `${map[state] || icons.wait}<span>${escapeHtml(message)}</span>`;
-      qrDetailEl.textContent = detail || '';
-      successBadgeEl.classList.toggle('visible', state === 'confirmed');
-      retryRowEl.classList.toggle('hidden', state !== 'expired' && state !== 'error');
-    }
-
-    function renderAccounts(accounts) {
-      if (!Array.isArray(accounts) || !accounts.length) {
-        accountsGridEl.innerHTML = '<div class="empty-state">No Weixin accounts are being reported yet.</div>';
+    function renderSummary() {
+      if (!state.accounts.length) {
+        summaryBanner.className = 'summary-banner warning';
+        summaryText.textContent = 'No account files detected yet. Generate a QR code to link the first account.';
         return;
       }
 
-      accountsGridEl.innerHTML = accounts.map((account) => `
-        <article class="account-item">
-          <div class="account-top">
-            <div>
+      if (hasOfflineAccounts()) {
+        summaryBanner.className = 'summary-banner warning';
+        summaryText.textContent = 'Some accounts appear offline or need attention.';
+      } else {
+        summaryBanner.className = 'summary-banner success';
+        summaryText.textContent = 'All accounts connected.';
+      }
+    }
+
+    function renderAccounts() {
+      if (!state.accounts.length) {
+        accountList.innerHTML = '<div class="empty-state">No WeChat accounts have been detected yet.</div>';
+        return;
+      }
+
+      accountList.innerHTML = state.accounts.map((account) => {
+        const tone = normalizeAccountTone(account.status);
+        const detail = account.notes || (tone === 'online' ? 'Reported by OpenClaw as connected.' : 'Account file exists but it is not currently reported as online.');
+        return `
+          <article class="account-chip">
+            <div class="account-meta">
               <div class="account-id">${escapeHtml(account.account || 'Unknown account')}</div>
-              <div class="account-note">Account identifier exposed by OpenClaw.</div>
+              <div class="account-note">${escapeHtml(detail)}</div>
             </div>
-            ${renderChip(account.status || 'UNKNOWN')}
-          </div>
-          <div class="account-note">${escapeHtml(account.notes || 'No extra notes reported.')}</div>
-        </article>
-      `).join('');
+            <div class="status-pill ${tone}">
+              <span class="status-dot" aria-hidden="true"></span>
+              <span>${escapeHtml(formatAccountText(account.status))}</span>
+            </div>
+          </article>
+        `;
+      }).join('');
     }
 
-    async function loadStatus() {
+    function setQrState(kind, text, detail, accountId) {
+      qrStatusBlock.classList.remove('hidden');
+      qrStateLabel.className = `qr-state-label ${kind}`;
+      qrStateText.textContent = text;
+      qrStateDetail.textContent = detail || '';
+      linkedAccount.classList.toggle('hidden', !accountId);
+      linkedAccount.textContent = accountId ? `Account: ${accountId}` : '';
+      announce(`${text}${accountId ? ` ${accountId}` : ''}`);
+    }
+
+    function resetQrVisuals() {
+      state.pollAbort = true;
+      state.currentSession = null;
+      qrFrame.classList.add('hidden');
+      qrStatusBlock.classList.add('hidden');
+      qrOverlay.classList.remove('visible');
+      qrOverlay.setAttribute('aria-hidden', 'true');
+      linkedAccount.classList.add('hidden');
+      linkedAccount.textContent = '';
+      const ctx = qrCanvas.getContext('2d');
+      ctx.clearRect(0, 0, qrCanvas.width, qrCanvas.height);
+    }
+
+    async function renderQrCode(url) {
+      qrFrame.classList.remove('hidden');
+      qrStatusBlock.classList.remove('hidden');
+      qrOverlay.classList.remove('visible');
+      qrOverlay.setAttribute('aria-hidden', 'true');
+      await QRCode.toCanvas(qrCanvas, url, {
+        width: 280,
+        margin: 2,
+        color: {
+          dark: '#0f172a',
+          light: '#ffffff',
+        },
+      });
+    }
+
+    async function fetchStatus() {
       const response = await fetch('/api/weixin/status', { cache: 'no-store' });
-      if (!response.ok) throw new Error('Failed to load Weixin status');
+      if (!response.ok) {
+        throw new Error('Failed to load WeChat status');
+      }
       const data = await response.json();
-      channelEnabledEl.textContent = data.enabled ? 'Enabled' : 'Disabled';
-      channelStateEl.textContent = data.state || 'UNKNOWN';
-      accountCountEl.textContent = Array.isArray(data.accounts) ? data.accounts.length : 0;
-      renderAccounts(data.accounts || []);
+      state.accounts = Array.isArray(data.accounts) ? data.accounts : [];
+      renderSummary();
+      renderAccounts();
+      setPrimaryLoading(false);
     }
 
-    async function pollQrStatus() {
-      if (!activeSessionId) return;
-      try {
-        const response = await fetch(`/api/weixin/qr/status?session=${encodeURIComponent(activeSessionId)}`, { cache: 'no-store' });
-        const data = await response.json();
+    function openModal(trigger) {
+      state.modalOpen = true;
+      state.lastTrigger = trigger || document.activeElement;
+      modalBackdrop.hidden = false;
+      requestAnimationFrame(() => modalBackdrop.classList.add('open'));
+      modalCancel.focus();
+      document.body.style.overflow = 'hidden';
+    }
 
-        if (!response.ok) {
-          clearQrPolling();
-          updateQrStatus('error', data.error || 'QR session ended', 'Generate a fresh QR code to try again.');
-          return;
-        }
-
-        if (data.status === 'scaned') {
-          updateQrStatus('scanned', 'Scanned! Confirm on WeChat...', 'The QR code was scanned. Please confirm the login on the phone.');
-          return;
-        }
-
-        if (data.status === 'confirmed') {
-          clearQrPolling();
-          updateQrStatus('confirmed', 'Connected', data.accountId ? `Bound account: ${data.accountId}` : 'The Weixin account is now connected.');
-          loadStatus().catch(() => {});
-          return;
-        }
-
-        if (data.status === 'expired') {
-          clearQrPolling();
-          updateQrStatus('expired', 'Expired', 'This QR code has expired. Generate a fresh one to continue.');
-          return;
-        }
-
-        updateQrStatus('waiting', 'Waiting for scan...', 'Ask the new user to scan the QR code in WeChat.');
-      } catch (error) {
-        clearQrPolling();
-        updateQrStatus('error', 'Unable to poll QR status', error.message || 'Generate a fresh QR code to retry.');
+    function closeModal() {
+      if (!state.modalOpen) return;
+      state.modalOpen = false;
+      modalBackdrop.classList.remove('open');
+      document.body.style.overflow = '';
+      setTimeout(() => {
+        if (!state.modalOpen) modalBackdrop.hidden = true;
+      }, 240);
+      if (state.lastTrigger && typeof state.lastTrigger.focus === 'function') {
+        state.lastTrigger.focus();
       }
     }
 
-    async function startQrFlow() {
-      const password = passwordInputEl.value.trim();
-      if (!password) {
-        showPasswordError('Enter the admin password to generate a QR code.');
-        return;
-      }
-
-      clearPasswordError();
-      clearQrPolling();
-      setLoadingState(true);
-      retryRowEl.classList.add('hidden');
+    async function startLoginFlow() {
+      setPrimaryLoading(true);
+      resetQrVisuals();
+      state.pollAbort = false;
 
       try {
         const response = await fetch('/api/weixin/qr/start', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password }),
+          body: JSON.stringify({}),
         });
         const data = await response.json();
-
-        if (response.status === 403) {
-          showPasswordError('Wrong password. Please try again.');
-          resetQrState();
-          return;
-        }
-
         if (!response.ok) {
-          throw new Error(data.error || 'Failed to generate QR code');
+          throw new Error(data.error || 'Failed to start QR login');
         }
 
-        activeSessionId = data.sessionId;
-        qrImageEl.src = data.qrcodeUrl;
-        qrImageEl.alt = 'Weixin QR code ready to scan';
-        showQrStage();
-        updateQrStatus('waiting', 'Waiting for scan...', 'Ask the new user to scan the QR code in WeChat.');
-        qrPollTimer = setInterval(pollQrStatus, 2000);
+        state.currentSession = data.sessionKey || data.session;
+        await renderQrCode(data.qrUrl);
+        setQrState('waiting', 'Waiting for scan…', 'Scan the QR code in WeChat to continue.');
+        closeModal();
         pollQrStatus();
       } catch (error) {
-        updateQrStatus('error', 'Failed to generate QR code', error.message || 'Please try again.');
-        showQrStage();
+        qrStatusBlock.classList.remove('hidden');
+        setQrState('error', 'Unable to generate QR code', error.message || 'Please try again.');
       } finally {
-        setLoadingState(false);
+        setPrimaryLoading(false);
       }
     }
 
-    passwordInputEl.addEventListener('input', () => {
-      clearPasswordError();
-      setGenerateButtonState();
+    async function pollQrStatus() {
+      const session = state.currentSession;
+      if (!session || state.pollAbort) return;
+
+      try {
+        const response = await fetch(`/api/weixin/qr/status?session=${encodeURIComponent(session)}`, { cache: 'no-store' });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to get QR status');
+        }
+
+        if (state.currentSession !== session || state.pollAbort) return;
+
+        if (data.status === 'connected') {
+          setQrState('connected', '✅ Connected!', data.message || 'The account is now connected.', data.accountId || null);
+          await fetchStatus().catch(() => {});
+          return;
+        }
+
+        if (data.status === 'expired') {
+          setQrState('expired', 'Expired — click to refresh', data.message || 'This QR code is no longer valid.');
+          qrOverlay.classList.add('visible');
+          qrOverlay.setAttribute('aria-hidden', 'false');
+          return;
+        }
+
+        if (data.status === 'error') {
+          setQrState('error', 'Login failed', data.message || 'Please generate a new QR code.');
+          qrOverlay.classList.add('visible');
+          qrOverlay.setAttribute('aria-hidden', 'false');
+          return;
+        }
+
+        const message = String(data.message || '').toLowerCase();
+        if (message.includes('scan')) {
+          setQrState('scanned', 'Scanned! Confirm on phone…', data.message || 'Please confirm the login on the phone.');
+        } else {
+          setQrState('waiting', 'Waiting for scan…', data.message || 'Scan the QR code in WeChat to continue.');
+        }
+
+        setTimeout(() => {
+          if (!state.pollAbort && state.currentSession === session) {
+            pollQrStatus();
+          }
+        }, 3000);
+      } catch (error) {
+        if (state.currentSession !== session || state.pollAbort) return;
+        setQrState('error', 'Login status unavailable', error.message || 'Please try again.');
+        qrOverlay.classList.add('visible');
+        qrOverlay.setAttribute('aria-hidden', 'false');
+      }
+    }
+
+    linkButton.addEventListener('click', (event) => openModal(event.currentTarget));
+    overlayRefreshButton.addEventListener('click', (event) => openModal(event.currentTarget));
+    modalCancel.addEventListener('click', closeModal);
+    modalConfirm.addEventListener('click', startLoginFlow);
+
+    modalBackdrop.addEventListener('click', (event) => {
+      if (event.target === modalBackdrop) closeModal();
     });
 
-    passwordInputEl.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') {
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && state.modalOpen) {
         event.preventDefault();
-        if (!generateButtonEl.disabled) startQrFlow();
+        closeModal();
       }
     });
 
-    generateButtonEl.addEventListener('click', startQrFlow);
-    retryButtonEl.addEventListener('click', startQrFlow);
-
-    setGenerateButtonState();
-    loadStatus().catch((error) => {
-      channelEnabledEl.textContent = 'Unavailable';
-      channelStateEl.textContent = 'ERROR';
-      accountsGridEl.innerHTML = `<div class="empty-state">${escapeHtml(error.message || 'Failed to load status')}</div>`;
+    fetchStatus().catch((error) => {
+      summaryBanner.className = 'summary-banner warning';
+      summaryText.textContent = error.message || 'Unable to load account status.';
+      accountList.innerHTML = `<div class="empty-state">${escapeHtml(error.message || 'Unable to load account status.')}</div>`;
     });
   </script>
 </body>
