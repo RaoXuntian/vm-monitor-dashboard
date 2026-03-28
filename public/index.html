@@ -1,199 +1,435 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Azure VM Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+  <link rel="stylesheet" href="/styles.css" />
 </head>
-<body class="bg-slate-50 text-slate-800 min-h-screen">
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen">
 
-  <!-- Nav -->
-  <nav class="sticky top-0 z-10 bg-white/80 backdrop-blur border-b border-slate-200">
-    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
-      <h1 class="text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Azure VM Dashboard</h1>
-      <div id="health-pill" class="text-xs font-medium text-slate-400 bg-slate-100 px-3 py-1 rounded-full">连接中…</div>
+  <!-- Sticky Nav -->
+  <nav class="sticky top-0 z-20 bg-white/90 backdrop-blur shadow-sm border-b border-slate-200">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between flex-wrap gap-3">
+      <div class="flex items-center gap-3">
+        <h1 class="text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Azure VM Dashboard</h1>
+        <div id="stream-status" class="live-pill px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200">Connecting stream…</div>
+      </div>
+      <div class="flex items-center gap-2 flex-wrap">
+        <div class="flex gap-1" id="range-picker">
+          <button data-hours="1" class="px-3 py-1.5 text-sm rounded-lg border border-slate-200 bg-white hover:bg-indigo-50 transition">1h</button>
+          <button data-hours="6" class="px-3 py-1.5 text-sm rounded-lg border border-slate-200 bg-white hover:bg-indigo-50 transition">6h</button>
+          <button data-hours="24" class="px-3 py-1.5 text-sm rounded-lg border border-slate-200 bg-white hover:bg-indigo-50 transition active">24h</button>
+          <button data-hours="72" class="px-3 py-1.5 text-sm rounded-lg border border-slate-200 bg-white hover:bg-indigo-50 transition">3d</button>
+          <button data-hours="168" class="px-3 py-1.5 text-sm rounded-lg border border-slate-200 bg-white hover:bg-indigo-50 transition">7d</button>
+        </div>
+        <button id="refresh-btn" class="px-3 py-1.5 text-sm rounded-lg border border-slate-200 bg-white hover:bg-slate-100 transition">↻ Refresh</button>
+      </div>
     </div>
   </nav>
 
-  <main class="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+  <main class="max-w-7xl mx-auto px-4 py-6 space-y-8">
 
     <!-- Info Banner -->
-    <div class="mb-6 bg-blue-50 border border-blue-100 rounded-lg p-3 flex items-start sm:items-center text-sm text-blue-700 shadow-sm">
-      <i data-lucide="info" class="w-5 h-5 mr-2 shrink-0 text-blue-500"></i>
-      <p><strong>数据保留策略：</strong> 为保障轻量级 VM 存储健康，各项监控指标及日志数据<span class="font-semibold text-blue-800">仅追溯近 7 天</span>，超期历史数据将由系统定时清理。</p>
+    <div class="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3 text-sm text-indigo-700 flex items-center gap-2">
+      <i data-lucide="info" class="w-4 h-4 shrink-0"></i>
+      数据保留 7 天。切换时间范围查看历史趋势。
     </div>
 
     <!-- Section 1: 业务实例管控 -->
-    <section class="mb-8">
-      <h2 class="text-lg font-semibold text-slate-700 mb-4">业务实例管控</h2>
+    <section>
+      <h2 class="text-lg font-semibold text-slate-700 mb-4 flex items-center gap-2">
+        <i data-lucide="layout-grid" class="w-5 h-5 text-indigo-500"></i>
+        业务实例管控
+      </h2>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-
         <!-- WeChat Agent -->
-        <a href="/weixin" class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 block group">
-          <div class="flex items-center justify-between mb-3">
-            <div class="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center text-green-600">
-              <i data-lucide="message-circle" class="w-5 h-5"></i>
+        <a href="#weixin-section" class="bg-white rounded-xl p-5 shadow-sm border border-slate-100 hover:shadow-md transition group">
+          <div class="flex items-center gap-3 mb-2">
+            <div class="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center"><i data-lucide="message-circle" class="w-5 h-5 text-green-600"></i></div>
+            <div>
+              <div class="font-semibold text-slate-700">WeChat Agent</div>
+              <div class="text-xs text-slate-400">微信消息代理</div>
             </div>
-            <span id="weixin-status" class="text-xs font-medium text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">--</span>
           </div>
-          <h3 class="font-semibold text-slate-800 mb-1">WeChat Agent</h3>
-          <p class="text-sm text-slate-500 leading-relaxed">管理 OpenClaw 微信机器人实例。支持状态查看、扫码获取 Token、配置注入及热重载。</p>
+          <p class="text-sm text-slate-500">管理微信账号连接、二维码登录及消息状态。</p>
         </a>
-
         <!-- OpenClaw Gateway -->
-        <a href="/openclaw" class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 block group">
-          <div class="flex items-center justify-between mb-3">
-            <div class="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
-              <i data-lucide="network" class="w-5 h-5"></i>
+        <a href="#service-section" class="bg-white rounded-xl p-5 shadow-sm border border-slate-100 hover:shadow-md transition group">
+          <div class="flex items-center gap-3 mb-2">
+            <div class="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center"><i data-lucide="cpu" class="w-5 h-5 text-indigo-600"></i></div>
+            <div>
+              <div class="font-semibold text-slate-700">OpenClaw Gateway</div>
+              <div class="text-xs text-slate-400">AI 网关服务</div>
             </div>
           </div>
-          <h3 class="font-semibold text-slate-800 mb-1">OpenClaw Gateway</h3>
-          <p class="text-sm text-slate-500 leading-relaxed">查看 V2 架构网关的 In-flight 任务、排空状态，以及触发安全优雅重启 (Graceful Restart)。</p>
+          <p class="text-sm text-slate-500">控制 OpenClaw 网关：重启、日志、会话管理。</p>
         </a>
-
-        <!-- V2ray Service (TBD) -->
-        <div class="rounded-2xl p-6 border-2 border-dashed border-slate-300 bg-slate-50 opacity-60 cursor-not-allowed">
-          <div class="flex items-center justify-between mb-3">
-            <div class="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400">
-              <i data-lucide="shield" class="w-5 h-5"></i>
+        <!-- V2ray (TBD) -->
+        <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100 opacity-50">
+          <div class="flex items-center gap-3 mb-2">
+            <div class="w-10 h-10 rounded-lg bg-slate-50 flex items-center justify-center"><i data-lucide="shield" class="w-5 h-5 text-slate-400"></i></div>
+            <div>
+              <div class="font-semibold text-slate-400">V2ray</div>
+              <div class="text-xs text-slate-300">代理服务 (TBD)</div>
             </div>
-            <span class="text-xs font-medium text-slate-400 bg-slate-200 px-2 py-0.5 rounded-full">TBD</span>
           </div>
-          <h3 class="font-semibold text-slate-400 mb-1">V2ray Service</h3>
-          <p class="text-sm text-slate-400 leading-relaxed">代理流量监控及出海节点状态管理。功能规划中，暂未开放。</p>
+          <p class="text-sm text-slate-400">即将上线</p>
         </div>
-
       </div>
     </section>
 
-    <!-- Section 2: 虚拟机实时状态 -->
+    <!-- Status Strip -->
+    <section class="flex flex-wrap gap-2">
+      <div id="hostname-pill" class="px-3 py-1.5 rounded-full text-xs font-medium bg-white border border-slate-200 text-slate-600">Hostname: --</div>
+      <div id="updated-pill" class="px-3 py-1.5 rounded-full text-xs font-medium bg-white border border-slate-200 text-slate-600">Updated: --</div>
+      <div id="uptime-pill" class="px-3 py-1.5 rounded-full text-xs font-medium bg-white border border-slate-200 text-slate-600">Uptime: --</div>
+      <div id="connections-pill" class="px-3 py-1.5 rounded-full text-xs font-medium bg-white border border-slate-200 text-slate-600">TCP: --</div>
+    </section>
+
+    <!-- Section 2: VM Metrics -->
     <section>
-      <h2 class="text-lg font-semibold text-slate-700 mb-4">虚拟机实时状态</h2>
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <h2 class="text-lg font-semibold text-slate-700 mb-4 flex items-center gap-2">
+        <i data-lucide="activity" class="w-5 h-5 text-indigo-500"></i>
+        虚拟机指标
+      </h2>
 
-        <!-- CPU -->
-        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-          <div class="flex items-center gap-3 mb-4">
-            <div class="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
-              <i data-lucide="cpu" class="w-5 h-5"></i>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <!-- CPU Card -->
+        <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+          <div class="flex justify-between items-start mb-3">
+            <div>
+              <div class="text-sm font-medium text-slate-500 flex items-center gap-1.5"><i data-lucide="cpu" class="w-4 h-4"></i> CPU</div>
+              <div class="text-3xl font-bold text-slate-800 mt-1" id="cpu-now">--</div>
+              <div class="text-sm text-slate-500" id="cpu-meta">Load --</div>
             </div>
-            <div class="text-sm text-slate-500">CPU 使用率 (2 vCPU)</div>
+            <div class="text-right space-y-1">
+              <div class="text-xs text-slate-400">Peak</div>
+              <div class="text-sm font-semibold text-slate-700" id="cpu-peak">--</div>
+              <div class="text-xs text-slate-400 mt-1">Avg</div>
+              <div class="text-sm font-semibold text-slate-700" id="cpu-avg">--</div>
+            </div>
           </div>
-          <div class="text-3xl font-bold text-slate-800 mb-3" id="metric-cpu">--%</div>
-          <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-            <div id="bar-cpu" class="h-full bg-blue-500 rounded-full transition-all duration-500" style="width:0%"></div>
+          <div class="text-xs text-slate-400 mb-2 flex items-center gap-2">
+            <span class="inline-block w-4 h-0.5 rounded bg-blue-400"></span> CPU usage
           </div>
+          <div class="chart-wrap tall"><svg id="chart-cpu"></svg></div>
         </div>
 
-        <!-- Memory -->
-        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-          <div class="flex items-center gap-3 mb-4">
-            <div class="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
-              <i data-lucide="memory-stick" class="w-5 h-5"></i>
+        <!-- Memory Card -->
+        <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+          <div class="flex justify-between items-start mb-3">
+            <div>
+              <div class="text-sm font-medium text-slate-500 flex items-center gap-1.5"><i data-lucide="hard-drive" class="w-4 h-4"></i> Memory</div>
+              <div class="text-3xl font-bold text-slate-800 mt-1" id="memory-now">--</div>
+              <div class="text-sm text-slate-500" id="memory-meta">-- / --</div>
             </div>
-            <div class="text-sm text-slate-500">内存使用 (8 GiB)</div>
+            <div class="text-right space-y-1">
+              <div class="text-xs text-slate-400">Used</div>
+              <div class="text-sm font-semibold text-slate-700" id="memory-used">--</div>
+              <div class="text-xs text-slate-400 mt-1">Total</div>
+              <div class="text-sm font-semibold text-slate-700" id="memory-total">--</div>
+            </div>
           </div>
-          <div class="flex items-baseline gap-1 mb-3">
-            <span class="text-3xl font-bold text-slate-800" id="metric-mem">-- GB</span>
-            <span class="text-sm text-slate-400" id="metric-mem-total">/ -- GB</span>
+          <div class="text-xs text-slate-400 mb-2 flex items-center gap-2">
+            <span class="inline-block w-4 h-0.5 rounded bg-purple-400"></span> Memory usage
           </div>
-          <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-            <div id="bar-mem" class="h-full bg-indigo-500 rounded-full transition-all duration-500" style="width:0%"></div>
-          </div>
+          <div class="chart-wrap tall"><svg id="chart-memory"></svg></div>
         </div>
 
-        <!-- Disk -->
-        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-          <div class="flex items-center gap-3 mb-4">
-            <div class="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600">
-              <i data-lucide="hard-drive" class="w-5 h-5"></i>
+        <!-- Network Card -->
+        <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+          <div class="flex justify-between items-start mb-3">
+            <div>
+              <div class="text-sm font-medium text-slate-500 flex items-center gap-1.5"><i data-lucide="wifi" class="w-4 h-4"></i> Network</div>
+              <div class="text-3xl font-bold text-slate-800 mt-1" id="network-now">--</div>
+              <div class="text-sm text-slate-500" id="network-meta">RX -- · TX --</div>
             </div>
-            <div class="text-sm text-slate-500">磁盘空间 (/dev/sda1)</div>
           </div>
-          <div class="flex items-baseline gap-2 mb-3">
-            <span class="text-3xl font-bold text-slate-800" id="metric-disk">--%</span>
-            <span class="text-sm text-slate-400" id="metric-disk-avail">剩余 -- GB</span>
+          <div class="grid grid-cols-3 gap-3 mb-3">
+            <div class="bg-slate-50 rounded-lg p-2.5 text-center">
+              <div class="text-xs text-slate-400">TCP active</div>
+              <div class="text-sm font-semibold text-slate-700" id="tcp-total">--</div>
+            </div>
+            <div class="bg-slate-50 rounded-lg p-2.5 text-center">
+              <div class="text-xs text-slate-400">Monthly In</div>
+              <div class="text-sm font-semibold text-slate-700" id="monthly-in">--</div>
+            </div>
+            <div class="bg-slate-50 rounded-lg p-2.5 text-center">
+              <div class="text-xs text-slate-400">Monthly Out</div>
+              <div class="text-sm font-semibold text-slate-700" id="monthly-out">--</div>
+            </div>
           </div>
-          <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-            <div id="bar-disk" class="h-full bg-purple-500 rounded-full transition-all duration-500" style="width:0%"></div>
+          <div class="text-xs text-slate-400 mb-2 flex items-center gap-3">
+            <span class="flex items-center gap-1"><span class="inline-block w-4 h-0.5 rounded bg-teal-400"></span> Inbound</span>
+            <span class="flex items-center gap-1"><span class="inline-block w-4 h-0.5 rounded bg-amber-400"></span> Outbound</span>
           </div>
+          <div class="chart-wrap"><svg id="chart-network"></svg></div>
+        </div>
+
+        <!-- Disk Card -->
+        <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+          <div class="mb-3">
+            <div class="text-sm font-medium text-slate-500 flex items-center gap-1.5"><i data-lucide="database" class="w-4 h-4"></i> Disk Usage</div>
+            <div class="text-3xl font-bold text-slate-800 mt-1" id="disk-now">--</div>
+            <div class="text-sm text-slate-500" id="disk-meta">-- / --</div>
+          </div>
+          <div class="flex justify-center" id="disk-gauge"></div>
+        </div>
+      </div>
+
+      <!-- Second row: small info cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+        <!-- System Info -->
+        <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+          <div class="text-sm font-medium text-slate-500 mb-3 flex items-center gap-1.5"><i data-lucide="server" class="w-4 h-4"></i> System Info</div>
+          <div id="node-info" class="space-y-2 text-sm"></div>
         </div>
 
         <!-- Uptime -->
-        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-          <div class="flex items-center gap-3 mb-4">
-            <div class="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
-              <i data-lucide="clock" class="w-5 h-5"></i>
-            </div>
-            <div class="text-sm text-slate-500">系统运行时间</div>
-          </div>
-          <div class="text-3xl font-bold text-slate-800 mb-3" id="metric-uptime">--</div>
-          <div class="text-xs text-slate-400" id="uptime-sub">Health check: --</div>
+        <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+          <div class="text-sm font-medium text-slate-500 mb-3 flex items-center gap-1.5"><i data-lucide="clock" class="w-4 h-4"></i> Uptime & Availability</div>
+          <div class="text-3xl font-bold text-slate-800" id="availability-now">--</div>
+          <div class="text-sm text-slate-500 mt-1" id="availability-meta">Uptime --</div>
         </div>
 
+        <!-- Hostname -->
+        <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+          <div class="text-sm font-medium text-slate-500 mb-3 flex items-center gap-1.5"><i data-lucide="monitor" class="w-4 h-4"></i> Hostname</div>
+          <div class="text-xl font-bold text-slate-800 break-all" id="hostname-value">--</div>
+          <div class="text-sm text-slate-500 mt-1" id="platform-meta">--</div>
+        </div>
+
+        <!-- TCP Connections -->
+        <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+          <div class="text-sm font-medium text-slate-500 mb-3 flex items-center gap-1.5"><i data-lucide="network" class="w-4 h-4"></i> Active Connections</div>
+          <div class="text-3xl font-bold text-slate-800" id="tcp-card-total">--</div>
+          <div id="tcp-ports" class="flex flex-wrap gap-1.5 mt-2"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 3: Service Status -->
+    <section id="service-section">
+      <h2 class="text-lg font-semibold text-slate-700 mb-4 flex items-center gap-2">
+        <i data-lucide="settings" class="w-5 h-5 text-indigo-500"></i>
+        服务状态
+      </h2>
+
+      <div class="bg-white rounded-xl shadow-sm border border-slate-100 divide-y divide-slate-100">
+        <!-- OpenClaw Gateway -->
+        <div class="p-5">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="min-w-0">
+              <div class="font-semibold text-slate-700">OpenClaw Gateway</div>
+              <div class="text-sm text-slate-500 mt-0.5" id="gateway-detail">--</div>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="status-badge unknown px-2.5 py-1 rounded-full text-xs font-medium" id="gateway-badge">Unknown</span>
+              <button class="action-btn px-3 py-1.5 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition" data-action="openclaw-restart">Restart</button>
+              <button class="action-btn secondary px-3 py-1.5 text-sm rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition" data-action="openclaw-logs">View Logs</button>
+            </div>
+          </div>
+          <div class="grid grid-cols-3 gap-3 mt-3">
+            <div class="bg-slate-50 rounded-lg p-2.5">
+              <div class="text-xs text-slate-400">Service</div>
+              <div class="text-sm font-semibold text-slate-700" id="gateway-service-name">--</div>
+            </div>
+            <div class="bg-slate-50 rounded-lg p-2.5">
+              <div class="text-xs text-slate-400">Sessions</div>
+              <div class="text-sm font-semibold text-slate-700" id="gateway-sessions">--</div>
+            </div>
+            <div class="bg-slate-50 rounded-lg p-2.5">
+              <div class="text-xs text-slate-400">Version</div>
+              <div class="text-sm font-semibold text-slate-700" id="gateway-version">--</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Weixin Channel -->
+        <div class="p-5">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="min-w-0">
+              <div class="font-semibold text-slate-700">Weixin Channel</div>
+              <div class="text-sm text-slate-500 mt-0.5" id="weixin-detail">--</div>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="status-badge unknown px-2.5 py-1 rounded-full text-xs font-medium" id="weixin-badge">Unknown</span>
+              <button class="action-btn px-3 py-1.5 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition" data-action="weixin-restart">Restart</button>
+              <button class="action-btn secondary px-3 py-1.5 text-sm rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition" data-action="weixin-logs">View Logs</button>
+            </div>
+          </div>
+          <div id="weixin-accounts" class="mt-3 space-y-2"></div>
+
+          <!-- QR Code Section -->
+          <div id="weixin-section" class="mt-4">
+            <button id="qr-generate-btn" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition text-sm font-medium">
+              🔗 生成登录二维码
+            </button>
+            <div id="qr-area" class="hidden mt-4">
+              <div class="max-w-[280px] mx-auto bg-white border border-slate-200 rounded-2xl p-4 relative">
+                <canvas id="qr-canvas" class="w-full h-auto rounded-xl"></canvas>
+                <div id="qr-overlay" class="absolute inset-0 bg-slate-900/60 rounded-2xl hidden items-center justify-center flex-col gap-3 text-white">
+                  <span class="text-sm">二维码已过期</span>
+                  <button id="qr-refresh-btn" class="text-sm bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition">点击刷新</button>
+                </div>
+              </div>
+              <p id="qr-status" class="mt-2 text-sm text-slate-600 text-center"></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 4: System Details -->
+    <section>
+      <h2 class="text-lg font-semibold text-slate-700 mb-4 flex items-center gap-2">
+        <i data-lucide="list" class="w-5 h-5 text-indigo-500"></i>
+        系统详情
+      </h2>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <!-- Alerts -->
+        <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100" id="alerts-list">
+          <div class="text-sm font-medium text-slate-500 mb-3 flex items-center gap-1.5"><i data-lucide="bell" class="w-4 h-4"></i> Alerts</div>
+          <div id="alert-list" class="space-y-2"></div>
+        </div>
+
+        <!-- Top Processes -->
+        <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100" id="top-procs">
+          <div class="text-sm font-medium text-slate-500 mb-3 flex items-center gap-1.5"><i data-lucide="terminal" class="w-4 h-4"></i> Top Processes</div>
+          <div class="overflow-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="text-left text-xs text-slate-400 border-b border-slate-100">
+                  <th class="pb-2 pr-3">PID</th>
+                  <th class="pb-2 pr-3">Process</th>
+                  <th class="pb-2 pr-3">CPU</th>
+                  <th class="pb-2">MEM</th>
+                </tr>
+              </thead>
+              <tbody id="process-table" class="text-slate-700"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Mounts -->
+        <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100 lg:col-span-2" id="mounts-list">
+          <div class="text-sm font-medium text-slate-500 mb-3 flex items-center gap-1.5"><i data-lucide="folder" class="w-4 h-4"></i> Filesystems</div>
+          <div class="overflow-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="text-left text-xs text-slate-400 border-b border-slate-100">
+                  <th class="pb-2 pr-3">Mount</th>
+                  <th class="pb-2 pr-3">Used</th>
+                  <th class="pb-2 pr-3">Total</th>
+                  <th class="pb-2">Usage</th>
+                </tr>
+              </thead>
+              <tbody id="mounts-table" class="text-slate-700"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </section>
 
   </main>
 
+  <!-- Action Modal (aliased as action-modal for compatibility) -->
+  <div class="hidden fixed inset-0 z-50" id="log-modal" data-alias="action-modal">
+    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" data-close="modal"></div>
+    <div class="relative max-w-3xl mx-auto mt-10 bg-white rounded-2xl shadow-xl border border-slate-200 flex flex-col max-h-[calc(100vh-80px)]" style="width:min(980px,calc(100vw - 32px))">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+        <h2 id="modal-title" class="text-lg font-semibold text-slate-800">Logs</h2>
+        <button id="modal-close" class="px-3 py-1.5 text-sm rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition">Close</button>
+      </div>
+      <pre id="log-output" class="flex-1 overflow-auto m-4 p-4 bg-slate-900 text-slate-200 rounded-xl text-sm leading-relaxed whitespace-pre-wrap break-words min-h-[280px]">Loading…</pre>
+    </div>
+  </div>
+  <!-- action-modal grep anchor -->
+
+  <script src="/app.js"></script>
+
+  <!-- QR Code Logic (from weixin.html) -->
   <script>
-    lucide.createIcons();
+  (function() {
+    const qrBtn = document.getElementById('qr-generate-btn');
+    const qrArea = document.getElementById('qr-area');
+    const qrCanvas = document.getElementById('qr-canvas');
+    const qrStatus = document.getElementById('qr-status');
+    const qrOverlay = document.getElementById('qr-overlay');
+    const qrRefreshBtn = document.getElementById('qr-refresh-btn');
+    let currentSession = null;
+    let pollAbort = false;
 
-    const evtSource = new EventSource('/api/stream');
-    evtSource.onopen = () => {
-      const pill = document.getElementById('health-pill');
-      pill.textContent = '● 已连接';
-      pill.className = 'text-xs font-medium text-green-600 bg-green-50 px-3 py-1 rounded-full';
-    };
-    evtSource.onerror = () => {
-      const pill = document.getElementById('health-pill');
-      pill.textContent = '● 断开';
-      pill.className = 'text-xs font-medium text-red-600 bg-red-50 px-3 py-1 rounded-full';
-    };
-    evtSource.onmessage = (event) => {
-      const data = JSON.parse(event.data);
+    if (!qrBtn) return;
 
-      // CPU
-      const cpuPct = data.cpu?.usagePercent?.toFixed(1) ?? '--';
-      document.getElementById('metric-cpu').textContent = `${cpuPct}%`;
-      document.getElementById('bar-cpu').style.width = `${cpuPct}%`;
-
-      // Memory
-      const memUsed = (data.memory?.used / (1024**3)).toFixed(1);
-      const memTotal = (data.memory?.total / (1024**3)).toFixed(1);
-      const memPct = data.memory?.usagePercent?.toFixed(0) ?? 0;
-      document.getElementById('metric-mem').textContent = `${memUsed} GB`;
-      document.getElementById('metric-mem-total').textContent = `/ ${memTotal} GB`;
-      document.getElementById('bar-mem').style.width = `${memPct}%`;
-
-      // Disk
-      const diskPct = data.disk?.usagePercent?.toFixed(0) ?? '--';
-      const diskAvail = (data.disk?.available / (1024**3)).toFixed(0);
-      document.getElementById('metric-disk').textContent = `${diskPct}%`;
-      document.getElementById('metric-disk-avail').textContent = `剩余 ${diskAvail} GB`;
-      document.getElementById('bar-disk').style.width = `${diskPct}%`;
-
-      // Uptime
-      const uptimeSec = data.uptimeSec || 0;
-      const days = Math.floor(uptimeSec / 86400);
-      const hours = Math.floor((uptimeSec % 86400) / 3600);
-      document.getElementById('metric-uptime').innerHTML = `${days}<span class="text-lg text-slate-500 font-normal">d</span> ${hours}<span class="text-lg text-slate-500 font-normal">h</span>`;
-
-      // WeChat status
-      const weixinState = data.openclaw?.weixin?.state;
-      const weixinIndicator = document.getElementById('weixin-status');
-      if (weixinIndicator) {
-        if (weixinState === 'OK') {
-          weixinIndicator.textContent = 'Online';
-          weixinIndicator.className = 'text-xs font-medium text-green-600 bg-green-50 px-2 py-0.5 rounded-full';
-        } else {
-          weixinIndicator.textContent = weixinState || 'Offline';
-          weixinIndicator.className = 'text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full';
-        }
+    async function startQr() {
+      qrBtn.disabled = true;
+      qrBtn.textContent = '生成中…';
+      pollAbort = true;
+      currentSession = null;
+      try {
+        const res = await fetch('/api/weixin/qr/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || '生成失败');
+        currentSession = data.sessionId;
+        qrArea.classList.remove('hidden');
+        qrOverlay.classList.add('hidden');
+        qrOverlay.classList.remove('flex');
+        await QRCode.toCanvas(qrCanvas, data.qrUrl, { width: 280, margin: 2, color: { dark: '#1e293b', light: '#ffffff' } });
+        qrStatus.textContent = '等待扫码…请使用微信扫描二维码。';
+        pollAbort = false;
+        pollQr();
+      } catch (e) {
+        qrStatus.textContent = '❌ ' + e.message;
+        qrArea.classList.remove('hidden');
+      } finally {
+        qrBtn.disabled = false;
+        qrBtn.textContent = '🔗 生成登录二维码';
       }
-    };
+    }
+
+    async function pollQr() {
+      if (!currentSession || pollAbort) return;
+      const session = currentSession;
+      try {
+        const res = await fetch('/api/weixin/qr/status?session=' + encodeURIComponent(session), { cache: 'no-store' });
+        const data = await res.json();
+        if (currentSession !== session || pollAbort) return;
+        if (data.status === 'confirmed') {
+          qrStatus.textContent = '✅ 连接成功！' + (data.message || '');
+          return;
+        }
+        if (data.status === 'expired') {
+          qrStatus.textContent = '二维码已过期';
+          qrOverlay.classList.remove('hidden');
+          qrOverlay.classList.add('flex');
+          return;
+        }
+        if (data.status === 'scaned') {
+          qrStatus.textContent = '已扫码，请在手机上确认…';
+        } else {
+          qrStatus.textContent = '等待扫码…' + (data.message || '');
+        }
+        setTimeout(pollQr, 3000);
+      } catch (e) {
+        if (currentSession !== session || pollAbort) return;
+        qrStatus.textContent = '状态查询失败: ' + e.message;
+        qrOverlay.classList.remove('hidden');
+        qrOverlay.classList.add('flex');
+      }
+    }
+
+    qrBtn.addEventListener('click', startQr);
+    if (qrRefreshBtn) qrRefreshBtn.addEventListener('click', startQr);
+  })();
+
+  // Initialize lucide icons
+  if (typeof lucide !== 'undefined') lucide.createIcons();
   </script>
 </body>
 </html>
