@@ -126,19 +126,11 @@ function render() {
     { key: 'memoryUsagePercent', color: '#c28cff', gradientId: 'memoryGradient', fillFrom: 'rgba(194,140,255,0.38)', fillTo: 'rgba(194,140,255,0.02)', label: 'Memory' },
   ], { yMin: 0, yMax: 100, ySuffix: '%' });
 
-  const allNetRates = series.flatMap((point) => [point.networkRxRateBps || 0, point.networkTxRateBps || 0]).filter((v) => v > 0).sort((a, b) => a - b);
-  let networkMax;
-  if (allNetRates.length < 4) {
-    networkMax = Math.max(1, ...allNetRates) * 1.3;
-  } else {
-    const q1 = allNetRates[Math.floor(allNetRates.length * 0.25)];
-    const q3 = allNetRates[Math.floor(allNetRates.length * 0.75)];
-    const iqr = q3 - q1;
-    const upperFence = q3 + iqr * 2.5;
-    const filtered = allNetRates.filter((v) => v <= upperFence);
-    const cleanMax = filtered.length > 0 ? filtered[filtered.length - 1] : allNetRates[allNetRates.length - 1];
-    networkMax = Math.max(1, cleanMax * 1.3);
-  }
+  const allNetRates = series.flatMap((point) => [point.networkRxRateBps || 0, point.networkTxRateBps || 0]).filter((v) => v > 0);
+  const dataMax = allNetRates.length > 0 ? Math.max(...allNetRates) : 1;
+  // Round up to a clean number with 20% headroom
+  const magnitude = Math.pow(10, Math.floor(Math.log10(Math.max(1, dataMax))));
+  const networkMax = Math.ceil(dataMax * 1.2 / magnitude) * magnitude;
   renderLineChart('chart-network', series, [
     { key: 'networkRxRateBps', color: '#63e2c6', gradientId: 'rxGradient', fillFrom: 'rgba(99,226,198,0.36)', fillTo: 'rgba(99,226,198,0.02)', label: 'Inbound' },
     { key: 'networkTxRateBps', color: '#f6c760', gradientId: 'txGradient', fillFrom: 'rgba(246,199,96,0.26)', fillTo: 'rgba(246,199,96,0.02)', label: 'Outbound' },
