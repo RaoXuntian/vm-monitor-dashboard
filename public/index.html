@@ -44,39 +44,32 @@
         <i data-lucide="layout-grid" class="w-5 h-5 text-indigo-500"></i>
         业务实例管控
       </h2>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <!-- WeChat Agent -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- OpenClaw + WeChat (combined) -->
         <a href="/weixin" class="bg-white rounded-xl p-5 shadow-sm border border-slate-100 hover:shadow-md transition group">
-          <div class="flex items-center gap-3 mb-2">
-            <div class="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center"><i data-lucide="message-circle" class="w-5 h-5 text-green-600"></i></div>
+          <div class="flex items-center gap-3 mb-3">
+            <div class="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center"><i data-lucide="bot" class="w-5 h-5 text-indigo-600"></i></div>
             <div>
-              <div class="font-semibold text-slate-700">WeChat Agent</div>
-              <div class="text-xs text-slate-400">微信消息代理</div>
+              <div class="font-semibold text-slate-700">OpenClaw 管控台</div>
+              <div class="text-xs text-slate-400">AI 网关 · 微信机器人</div>
             </div>
           </div>
-          <p class="text-sm text-slate-500">管理微信账号连接、二维码登录及消息状态。</p>
-        </a>
-        <!-- OpenClaw Gateway -->
-        <a href="/weixin" class="bg-white rounded-xl p-5 shadow-sm border border-slate-100 hover:shadow-md transition group">
-          <div class="flex items-center gap-3 mb-2">
-            <div class="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center"><i data-lucide="cpu" class="w-5 h-5 text-indigo-600"></i></div>
-            <div>
-              <div class="font-semibold text-slate-700">OpenClaw Gateway</div>
-              <div class="text-xs text-slate-400">AI 网关服务</div>
-            </div>
+          <p class="text-sm text-slate-500 mb-3">管理 OpenClaw 网关状态、微信账号连接、二维码登录、日志查看及优雅重启。</p>
+          <div class="flex items-center text-sm font-medium text-indigo-600 group-hover:text-indigo-700">
+            进入控制台 <i data-lucide="arrow-right" class="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform"></i>
           </div>
-          <p class="text-sm text-slate-500">控制 OpenClaw 网关：重启、日志、会话管理。</p>
         </a>
         <!-- V2ray (TBD) -->
-        <div class="bg-white rounded-xl p-5 shadow-sm border border-slate-100 opacity-50">
-          <div class="flex items-center gap-3 mb-2">
+        <div class="bg-white rounded-xl p-5 shadow-sm border border-dashed border-slate-200 opacity-50">
+          <div class="flex items-center gap-3 mb-3">
             <div class="w-10 h-10 rounded-lg bg-slate-50 flex items-center justify-center"><i data-lucide="shield" class="w-5 h-5 text-slate-400"></i></div>
             <div>
-              <div class="font-semibold text-slate-400">V2ray</div>
+              <div class="font-semibold text-slate-400">V2ray / Xray</div>
               <div class="text-xs text-slate-300">代理服务 (TBD)</div>
             </div>
           </div>
-          <p class="text-sm text-slate-400">即将上线</p>
+          <p class="text-sm text-slate-400 mb-3">代理流量监控及出海节点状态管理。功能规划中。</p>
+          <div class="flex items-center text-sm font-medium text-slate-300">即将上线</div>
         </div>
       </div>
     </section>
