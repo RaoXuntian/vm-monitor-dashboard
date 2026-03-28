@@ -1003,9 +1003,16 @@ async function handleApi(req, res, pathname, searchParams) {
 async function bootstrap() {
   await ensureDataDir();
   await loadMonthlyTrafficState();
-  await detectGatewayServiceName();
-  await refreshOpenClawStatus();
-  await collectSample();
+
+  // Start server FIRST, then do slow data collection in background
+  server.listen(PORT, HOST, () => {
+    console.log(`VM monitor dashboard running on http://${HOST}:${PORT}`);
+  });
+
+  // Slow operations run in background — don't block server startup
+  detectGatewayServiceName().catch(() => {});
+  refreshOpenClawStatus().catch((err) => console.error('initial openclaw status error', err));
+  collectSample().catch((err) => console.error('initial sample error', err));
 
   setInterval(() => {
     collectSample().catch((err) => console.error('collector error', err));
@@ -1042,11 +1049,6 @@ const server = http.createServer(async (req, res) => {
 });
 
 bootstrap()
-  .then(() => {
-    server.listen(PORT, HOST, () => {
-      console.log(`VM monitor dashboard running on http://${HOST}:${PORT}`);
-    });
-  })
   .catch((err) => {
     console.error('failed to start', err);
     process.exit(1);
