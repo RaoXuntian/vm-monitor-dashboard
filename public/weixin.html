@@ -1,543 +1,97 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WeChat Management</title>
-  <link rel="stylesheet" href="/styles.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
-  <style>
-    :root {
-      color-scheme: dark;
-      --page-max: 960px;
-      --surface: rgba(15, 23, 42, 0.74);
-      --surface-strong: rgba(15, 23, 42, 0.88);
-      --surface-soft: rgba(255, 255, 255, 0.04);
-      --border: rgba(148, 163, 184, 0.16);
-      --border-strong: rgba(129, 140, 248, 0.28);
-      --text-primary: #eef2ff;
-      --text-secondary: #cbd5f5;
-      --text-muted: #94a3b8;
-      --accent: #8b5cf6;
-      --accent-strong: #a78bfa;
-      --success: #34d399;
-      --success-soft: rgba(52, 211, 153, 0.16);
-      --warning: #fbbf24;
-      --warning-soft: rgba(251, 191, 36, 0.16);
-      --danger: #fb7185;
-      --danger-soft: rgba(251, 113, 133, 0.16);
-      --shadow: 0 24px 70px rgba(2, 6, 23, 0.38);
-      --radius-xl: 28px;
-      --radius-lg: 20px;
-      --radius-md: 16px;
-      --focus-ring: 0 0 0 4px rgba(129, 140, 248, 0.22);
-      --transition-fast: 160ms ease;
-      --transition-base: 240ms ease;
-    }
-
-    * { box-sizing: border-box; }
-    html, body { min-height: 100%; margin: 0; }
-
-    body {
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-      color: var(--text-primary);
-      background:
-        radial-gradient(circle at top left, rgba(99, 102, 241, 0.16), transparent 22%),
-        radial-gradient(circle at bottom right, rgba(168, 85, 247, 0.14), transparent 24%),
-        #020617;
-      padding: 24px 16px 48px;
-    }
-
-    a, button { font: inherit; }
-    h1, h2, h3, p { margin: 0; }
-
-    .page-shell {
-      width: min(100%, var(--page-max));
-      margin: 0 auto;
-      display: grid;
-      gap: 18px;
-    }
-
-    .glass-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-xl);
-      backdrop-filter: blur(18px);
-      box-shadow: var(--shadow);
-    }
-
-    .page-header,
-    .status-card,
-    .link-card { padding: 22px; }
-
-    .page-header {
-      display: grid;
-      gap: 18px;
-    }
-
-    .back-link {
-      width: fit-content;
-      min-height: 44px;
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      color: var(--text-secondary);
-      text-decoration: none;
-      padding: 10px 14px;
-      border-radius: 999px;
-      border: 1px solid rgba(255,255,255,0.08);
-      background: rgba(255,255,255,0.04);
-      transition: transform var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
-    }
-
-    .back-link:hover { transform: translateY(-1px); }
-    .eyebrow {
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      font-size: 0.76rem;
-      margin-bottom: 8px;
-    }
-
-    h1 {
-      font-size: clamp(2rem, 5vw, 2.8rem);
-      line-height: 1.02;
-      margin-bottom: 10px;
-    }
-
-    .lead {
-      color: var(--text-secondary);
-      line-height: 1.65;
-      max-width: 62ch;
-    }
-
-    .panel-grid {
-      display: grid;
-      gap: 18px;
-      grid-template-columns: 1fr;
-    }
-
-    .section-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 16px;
-    }
-
-    .section-title { font-size: 1.08rem; }
-
-    .summary-banner {
-      border-radius: var(--radius-lg);
-      padding: 16px 18px;
-      border: 1px solid var(--border);
-      background: var(--surface-soft);
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 16px;
-      color: var(--text-secondary);
-    }
-
-    .summary-banner.success {
-      color: var(--success);
-      background: var(--success-soft);
-      border-color: rgba(52, 211, 153, 0.28);
-    }
-
-    .summary-banner.warning {
-      color: var(--warning);
-      background: var(--warning-soft);
-      border-color: rgba(251, 191, 36, 0.28);
-    }
-
-    .account-list {
-      display: grid;
-      gap: 12px;
-    }
-
-    .account-chip {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 14px;
-      flex-wrap: wrap;
-      padding: 14px 16px;
-      border-radius: var(--radius-lg);
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.08);
-    }
-
-    .account-meta {
-      min-width: 0;
-      display: grid;
-      gap: 4px;
-    }
-
-    .account-id {
-      font-weight: 700;
-      word-break: break-word;
-    }
-
-    .account-note {
-      color: var(--text-muted);
-      font-size: 0.94rem;
-      line-height: 1.45;
-    }
-
-    .status-pill {
-      min-height: 44px;
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 14px;
-      border-radius: 999px;
-      font-weight: 700;
-      border: 1px solid transparent;
-      white-space: nowrap;
-    }
-
-    .status-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 999px;
-      flex: 0 0 auto;
-    }
-
-    .status-pill.online {
-      color: var(--success);
-      background: var(--success-soft);
-      border-color: rgba(52, 211, 153, 0.28);
-    }
-
-    .status-pill.online .status-dot { background: currentColor; }
-
-    .status-pill.offline,
-    .status-pill.error {
-      color: var(--danger);
-      background: var(--danger-soft);
-      border-color: rgba(251, 113, 133, 0.28);
-    }
-
-    .status-pill.offline .status-dot,
-    .status-pill.error .status-dot { background: currentColor; }
-
-    .status-pill.pending,
-    .status-pill.warning {
-      color: var(--warning);
-      background: var(--warning-soft);
-      border-color: rgba(251, 191, 36, 0.28);
-    }
-
-    .status-pill.pending .status-dot,
-    .status-pill.warning .status-dot { background: currentColor; }
-
-    .muted-copy {
-      color: var(--text-muted);
-      line-height: 1.6;
-    }
-
-    .primary-button,
-    .secondary-button,
-    .ghost-button {
-      min-width: 44px;
-      min-height: 44px;
-      border: 0;
-      border-radius: var(--radius-md);
-      padding: 12px 18px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      cursor: pointer;
-      touch-action: manipulation;
-      transition: transform var(--transition-fast), opacity var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast);
-    }
-
-    .primary-button {
-      background: linear-gradient(135deg, rgba(99, 102, 241, 0.86), rgba(139, 92, 246, 0.86));
-      color: white;
-      box-shadow: 0 16px 32px rgba(99, 102, 241, 0.24);
-    }
-
-    .primary-button:hover:not(:disabled),
-    .secondary-button:hover,
-    .ghost-button:hover { transform: translateY(-1px); }
-
-    .secondary-button {
-      background: rgba(255,255,255,0.08);
-      color: var(--text-primary);
-      border: 1px solid rgba(255,255,255,0.08);
-    }
-
-    .ghost-button {
-      background: transparent;
-      color: var(--text-secondary);
-      border: 1px solid rgba(255,255,255,0.08);
-    }
-
-    .primary-button:disabled {
-      opacity: 0.72;
-      cursor: wait;
-      transform: none;
-    }
-
-    .button-spinner {
-      width: 18px;
-      height: 18px;
-      border-radius: 999px;
-      border: 2px solid rgba(255,255,255,0.28);
-      border-top-color: white;
-      animation: spin 900ms linear infinite;
-    }
-
-    .qr-shell {
-      margin-top: 18px;
-      display: grid;
-      gap: 16px;
-    }
-
-    .qr-frame {
-      position: relative;
-      width: min(100%, 320px);
-      aspect-ratio: 1;
-      margin: 0 auto;
-      padding: 16px;
-      border-radius: 24px;
-      background: transparent;
-      box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06);
-      display: grid;
-      place-items: center;
-      overflow: hidden;
-    }
-
-    #qr-canvas {
-      width: 100%;
-      height: auto;
-      display: block;
-      border-radius: 14px;
-    }
-
-    .qr-overlay {
-      position: absolute;
-      inset: 0;
-      display: none;
-      align-content: center;
-      justify-items: center;
-      gap: 14px;
-      padding: 18px;
-      background: rgba(2, 6, 23, 0.6);
-      color: white;
-      text-align: center;
-      opacity: 0;
-      transition: opacity var(--transition-base);
-    }
-
-    .qr-overlay.visible {
-      display: grid;
-      opacity: 1;
-    }
-
-    .qr-status-block {
-      display: grid;
-      gap: 8px;
-      justify-items: center;
-      text-align: center;
-    }
-
-    .qr-state-label {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      font-weight: 700;
-      line-height: 1.5;
-    }
-
-    .qr-state-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 999px;
-      background: currentColor;
-      flex: 0 0 auto;
-    }
-
-    .qr-state-label.waiting { color: var(--text-secondary); }
-    .qr-state-label.scanned { color: var(--warning); }
-    .qr-state-label.connected { color: var(--success); }
-    .qr-state-label.expired,
-    .qr-state-label.error { color: var(--danger); }
-
-    .linked-account {
-      color: var(--text-secondary);
-      font-size: 0.94rem;
-    }
-
-    .empty-state {
-      border-radius: var(--radius-lg);
-      padding: 18px;
-      color: var(--text-muted);
-      background: rgba(255,255,255,0.03);
-      border: 1px dashed rgba(255,255,255,0.12);
-    }
-
-    .modal-backdrop {
-      position: fixed;
-      inset: 0;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-      background: rgba(2, 6, 23, 0.7);
-      opacity: 0;
-      transition: opacity var(--transition-base);
-      z-index: 20;
-    }
-
-    .modal-backdrop.open {
-      display: flex;
-      opacity: 1;
-    }
-
-    .modal-dialog {
-      width: min(100%, 520px);
-      border-radius: 24px;
-      padding: 24px;
-      background: var(--surface-strong);
-      border: 1px solid var(--border-strong);
-      box-shadow: var(--shadow);
-      transform: translateY(10px);
-      transition: transform var(--transition-base);
-    }
-
-    .modal-backdrop.open .modal-dialog { transform: translateY(0); }
-
-    .modal-copy { color: var(--text-secondary); line-height: 1.6; margin-top: 10px; }
-    .modal-actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 12px;
-      flex-wrap: wrap;
-      margin-top: 20px;
-    }
-
-    .sr-only {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      padding: 0;
-      margin: -1px;
-      overflow: hidden;
-      clip: rect(0, 0, 0, 0);
-      white-space: nowrap;
-      border: 0;
-    }
-
-    :focus-visible {
-      outline: none;
-      box-shadow: var(--focus-ring);
-    }
-
-    .hidden { display: none !important; }
-
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    @media (min-width: 860px) {
-      body { padding: 28px 20px 56px; }
-      .panel-grid { grid-template-columns: 1.05fr 0.95fr; align-items: start; }
-      .page-header, .status-card, .link-card { padding: 26px; }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      *, *::before, *::after {
-        animation-duration: 1ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 1ms !important;
-        scroll-behavior: auto !important;
-      }
-    }
-  </style>
 </head>
-<body>
-  <main class="page-shell">
-    <section class="glass-card page-header">
-      <a class="back-link" href="/" aria-label="Back to dashboard">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
-        </svg>
-        <span>Back to dashboard</span>
-      </a>
-      <div>
-        <div class="eyebrow">OpenClaw · Weixin channel</div>
-        <h1>WeChat Management</h1>
-        <p class="lead">Check current account connectivity and generate a fresh login QR code through the OpenClaw gateway when you need to link or relink a WeChat account.</p>
-      </div>
-    </section>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
 
-    <section class="panel-grid">
-      <section class="glass-card status-card" aria-labelledby="status-heading">
-        <div class="section-head">
-          <h2 class="section-title" id="status-heading">Account Status</h2>
+  <!-- Nav -->
+  <nav class="sticky top-0 z-10 bg-white/80 backdrop-blur border-b border-slate-200">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <a href="/" class="text-sm text-slate-500 hover:text-indigo-600 transition-colors flex items-center gap-1">
+          <i data-lucide="arrow-left" class="w-4 h-4"></i>
+          返回主面板
+        </a>
+        <h1 class="text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">WeChat Management</h1>
+      </div>
+    </div>
+  </nav>
+
+  <main class="max-w-4xl mx-auto px-4 sm:px-6 py-6">
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+      <!-- Account Status -->
+      <section class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+        <h2 class="font-semibold text-slate-700 mb-4">账号状态</h2>
+        <div id="summary-banner" class="mb-4 rounded-lg p-3 text-sm bg-slate-50 border border-slate-200 text-slate-500">
+          正在加载账号状态…
         </div>
-        <div id="summary-banner" class="summary-banner">
-          <span id="summary-text">Loading account status…</span>
-        </div>
-        <div id="account-list" class="account-list">
-          <div class="empty-state">Loading known accounts…</div>
+        <div id="account-list" class="space-y-3">
+          <div class="text-sm text-slate-400 p-3 border border-dashed border-slate-200 rounded-lg">正在加载…</div>
         </div>
       </section>
 
-      <section class="glass-card link-card" aria-labelledby="link-heading">
-        <div class="section-head">
-          <h2 class="section-title" id="link-heading">Link a WeChat Account</h2>
-        </div>
-        <p class="muted-copy">Generate a new QR code through the local gateway. After scanning, confirm the login on the phone to finish linking.</p>
+      <!-- QR Code Section -->
+      <section class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+        <h2 class="font-semibold text-slate-700 mb-2">连接新微信账号</h2>
+        <p class="text-sm text-slate-500 mb-4">通过本地网关生成新的登录二维码，扫码后在手机上确认即可完成绑定。</p>
 
-        <div style="margin-top: 18px;">
-          <button id="link-button" class="primary-button" type="button">
-            <span id="link-spinner" class="button-spinner hidden" aria-hidden="true"></span>
-            <span id="link-label">🔗 Link New WeChat Account</span>
-          </button>
-        </div>
+        <button id="link-button" type="button" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 px-4 rounded-xl transition-colors flex items-center justify-center gap-2">
+          <span id="link-spinner" class="hidden w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+          <span id="link-label">🔗 生成登录二维码</span>
+        </button>
 
-        <div class="qr-shell" id="qr-shell">
-          <div class="qr-frame hidden" id="qr-frame">
-            <canvas id="qr-canvas" aria-label="WeChat login QR code"></canvas>
-            <div id="qr-overlay" class="qr-overlay" aria-hidden="true">
-              <div>QR code expired</div>
-              <button id="overlay-refresh-button" class="secondary-button" type="button">Click to refresh</button>
+        <!-- QR Display -->
+        <div id="qr-shell" class="mt-5">
+          <div id="qr-frame" class="hidden relative w-full max-w-[280px] mx-auto aspect-square rounded-2xl bg-white border border-slate-200 flex items-center justify-center p-4">
+            <canvas id="qr-canvas" class="w-full h-auto rounded-xl"></canvas>
+            <div id="qr-overlay" class="absolute inset-0 bg-slate-900/60 rounded-2xl hidden items-center justify-center flex-col gap-3 text-white">
+              <span class="text-sm">二维码已过期</span>
+              <button id="overlay-refresh-button" type="button" class="text-sm bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition-colors">点击刷新</button>
             </div>
           </div>
 
-          <div class="qr-status-block hidden" id="qr-status-block">
-            <div id="qr-state-label" class="qr-state-label waiting">
-              <span class="qr-state-dot" aria-hidden="true"></span>
-              <span id="qr-state-text">Waiting for scan…</span>
+          <div id="qr-status-block" class="hidden mt-4 text-center space-y-1">
+            <div id="qr-state-label" class="inline-flex items-center gap-2 font-semibold text-slate-500">
+              <span id="qr-state-dot" class="w-2.5 h-2.5 rounded-full bg-current"></span>
+              <span id="qr-state-text">等待扫码…</span>
             </div>
-            <div id="qr-state-detail" class="muted-copy">Generate a QR code to start linking.</div>
-            <div id="linked-account" class="linked-account hidden"></div>
+            <div id="qr-state-detail" class="text-sm text-slate-400"></div>
+            <div id="linked-account" class="hidden text-sm text-slate-500"></div>
           </div>
         </div>
 
         <div id="status-live" class="sr-only" aria-live="polite"></div>
       </section>
-    </section>
+
+    </div>
   </main>
 
-  <div id="modal-backdrop" class="modal-backdrop" hidden>
-    <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-copy">
-      <h2 id="modal-title">Confirm Account Linking</h2>
-      <p id="modal-copy" class="modal-copy">This will generate a new QR code. If an account is already connected, it may be replaced.</p>
-      <div class="modal-actions">
-        <button id="modal-cancel" class="ghost-button" type="button">Cancel</button>
-        <button id="modal-confirm" class="primary-button" type="button">
-          <span id="modal-spinner" class="button-spinner hidden" aria-hidden="true"></span>
-          <span id="modal-confirm-label">Generate QR Code</span>
+  <!-- Modal -->
+  <div id="modal-backdrop" class="fixed inset-0 z-20 bg-slate-900/50 hidden items-center justify-center p-4" hidden>
+    <div class="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl border border-slate-200">
+      <h2 class="font-semibold text-slate-800 text-lg">确认操作</h2>
+      <p class="text-sm text-slate-500 mt-2 leading-relaxed">将生成新的登录二维码。如果已有账号连接，可能会被替换。</p>
+      <div class="flex justify-end gap-3 mt-5">
+        <button id="modal-cancel" type="button" class="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">取消</button>
+        <button id="modal-confirm" type="button" class="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors flex items-center gap-2">
+          <span id="modal-spinner" class="hidden w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+          <span id="modal-confirm-label">确认生成</span>
         </button>
       </div>
     </div>
   </div>
 
   <script>
+    lucide.createIcons();
+
     const state = {
       accounts: [],
       modalOpen: false,
@@ -545,14 +99,12 @@
       loadingQr: false,
       currentSession: null,
       pollAbort: false,
-      accountStatusMap: new Map(),
     };
 
     const linkButton = document.getElementById('link-button');
     const linkLabel = document.getElementById('link-label');
     const linkSpinner = document.getElementById('link-spinner');
     const summaryBanner = document.getElementById('summary-banner');
-    const summaryText = document.getElementById('summary-text');
     const accountList = document.getElementById('account-list');
     const qrFrame = document.getElementById('qr-frame');
     const qrCanvas = document.getElementById('qr-canvas');
@@ -570,98 +122,76 @@
     const modalSpinner = document.getElementById('modal-spinner');
     const modalConfirmLabel = document.getElementById('modal-confirm-label');
 
-    function escapeHtml(value) {
-      return String(value || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
+    function escapeHtml(v) {
+      return String(v || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
-    function announce(message) {
-      liveRegion.textContent = message;
-    }
+    function announce(msg) { liveRegion.textContent = msg; }
 
-    function setPrimaryLoading(isLoading) {
-      state.loadingQr = isLoading;
-      linkButton.disabled = isLoading;
-      modalConfirm.disabled = isLoading;
-      linkSpinner.classList.toggle('hidden', !isLoading);
-      modalSpinner.classList.toggle('hidden', !isLoading);
-      modalConfirmLabel.textContent = isLoading ? 'Generating…' : 'Generate QR Code';
-      linkLabel.textContent = isLoading
-        ? 'Generating QR Code…'
-        : (hasOfflineAccounts() ? 'Refresh Login' : '🔗 Link New WeChat Account');
-    }
-
-    function normalizeAccountTone(rawStatus) {
-      const value = String(rawStatus || '').toUpperCase();
-      if (['OK', 'CONNECTED', 'ONLINE', 'ACTIVE'].includes(value)) return 'online';
-      if (['WARN', 'PENDING', 'WAITING', 'SCANED', 'SCANNED'].includes(value)) return 'warning';
-      if (['OFFLINE', 'ERROR', 'FAILED'].includes(value)) return 'offline';
+    function normalizeStatus(raw) {
+      const v = String(raw || '').toUpperCase();
+      if (['OK','CONNECTED','ONLINE','ACTIVE'].includes(v)) return 'online';
+      if (['WARN','PENDING','WAITING','SCANED','SCANNED'].includes(v)) return 'warning';
       return 'offline';
     }
 
-    function formatAccountText(rawStatus) {
-      const tone = normalizeAccountTone(rawStatus);
-      if (tone === 'online') return 'Online';
-      if (tone === 'warning') return 'Needs attention';
-      return 'Offline';
-    }
-
-    function hasOfflineAccounts() {
-      return state.accounts.some((item) => normalizeAccountTone(item.status) !== 'online');
+    function setPrimaryLoading(loading) {
+      state.loadingQr = loading;
+      linkButton.disabled = loading;
+      modalConfirm.disabled = loading;
+      linkSpinner.classList.toggle('hidden', !loading);
+      modalSpinner.classList.toggle('hidden', !loading);
+      modalConfirmLabel.textContent = loading ? '生成中…' : '确认生成';
+      linkLabel.textContent = loading ? '生成中…' : '🔗 生成登录二维码';
     }
 
     function renderSummary() {
       if (!state.accounts.length) {
-        summaryBanner.className = 'summary-banner warning';
-        summaryText.textContent = 'No account files detected yet. Generate a QR code to link the first account.';
+        summaryBanner.className = 'mb-4 rounded-lg p-3 text-sm bg-amber-50 border border-amber-200 text-amber-700';
+        summaryBanner.textContent = '暂未检测到账号，请生成二维码绑定。';
         return;
       }
-
-      if (hasOfflineAccounts()) {
-        summaryBanner.className = 'summary-banner warning';
-        summaryText.textContent = 'Some accounts appear offline or need attention.';
+      const hasOffline = state.accounts.some(a => normalizeStatus(a.status) !== 'online');
+      if (hasOffline) {
+        summaryBanner.className = 'mb-4 rounded-lg p-3 text-sm bg-amber-50 border border-amber-200 text-amber-700';
+        summaryBanner.textContent = '部分账号离线或需要关注。';
       } else {
-        summaryBanner.className = 'summary-banner success';
-        summaryText.textContent = 'All accounts connected.';
+        summaryBanner.className = 'mb-4 rounded-lg p-3 text-sm bg-green-50 border border-green-200 text-green-700';
+        summaryBanner.textContent = '✅ 所有账号已连接。';
       }
     }
 
     function renderAccounts() {
       if (!state.accounts.length) {
-        accountList.innerHTML = '<div class="empty-state">No WeChat accounts have been detected yet.</div>';
+        accountList.innerHTML = '<div class="text-sm text-slate-400 p-3 border border-dashed border-slate-200 rounded-lg">暂无已绑定的微信账号。</div>';
         return;
       }
-
-      accountList.innerHTML = state.accounts.map((account) => {
-        const tone = normalizeAccountTone(account.status);
-        const detail = account.notes || (tone === 'online' ? 'Reported by OpenClaw as connected.' : 'Account file exists but it is not currently reported as online.');
-        return `
-          <article class="account-chip">
-            <div class="account-meta">
-              <div class="account-id">${escapeHtml(account.account || 'Unknown account')}</div>
-              <div class="account-note">${escapeHtml(detail)}</div>
-            </div>
-            <div class="status-pill ${tone}">
-              <span class="status-dot" aria-hidden="true"></span>
-              <span>${escapeHtml(formatAccountText(account.status))}</span>
-            </div>
-          </article>
-        `;
+      accountList.innerHTML = state.accounts.map(a => {
+        const tone = normalizeStatus(a.status);
+        const dotColor = tone === 'online' ? 'bg-green-500' : tone === 'warning' ? 'bg-amber-500' : 'bg-red-500';
+        const label = tone === 'online' ? '在线' : tone === 'warning' ? '待确认' : '离线';
+        return `<div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
+          <div class="min-w-0">
+            <div class="font-medium text-slate-700 truncate">${escapeHtml(a.account || 'Unknown')}</div>
+            ${a.baseUrl ? `<div class="text-xs text-slate-400 truncate">${escapeHtml(a.baseUrl)}</div>` : ''}
+          </div>
+          <div class="flex items-center gap-1.5 text-xs font-medium shrink-0">
+            <span class="w-2 h-2 rounded-full ${dotColor}"></span>
+            <span>${label}</span>
+          </div>
+        </div>`;
       }).join('');
     }
 
     function setQrState(kind, text, detail, accountId) {
       qrStatusBlock.classList.remove('hidden');
-      qrStateLabel.className = `qr-state-label ${kind}`;
+      const colors = { waiting: 'text-slate-500', scanned: 'text-amber-600', connected: 'text-green-600', expired: 'text-red-500', error: 'text-red-500' };
+      qrStateLabel.className = `inline-flex items-center gap-2 font-semibold ${colors[kind] || 'text-slate-500'}`;
       qrStateText.textContent = text;
       qrStateDetail.textContent = detail || '';
       linkedAccount.classList.toggle('hidden', !accountId);
-      linkedAccount.textContent = accountId ? `Account: ${accountId}` : '';
-      announce(`${text}${accountId ? ` ${accountId}` : ''}`);
+      linkedAccount.textContent = accountId ? `账号: ${accountId}` : '';
+      announce(text);
     }
 
     function resetQrVisuals() {
@@ -669,10 +199,9 @@
       state.currentSession = null;
       qrFrame.classList.add('hidden');
       qrStatusBlock.classList.add('hidden');
-      qrOverlay.classList.remove('visible');
-      qrOverlay.setAttribute('aria-hidden', 'true');
+      qrOverlay.classList.add('hidden');
+      qrOverlay.classList.remove('flex');
       linkedAccount.classList.add('hidden');
-      linkedAccount.textContent = '';
       const ctx = qrCanvas.getContext('2d');
       ctx.clearRect(0, 0, qrCanvas.width, qrCanvas.height);
     }
@@ -680,24 +209,15 @@
     async function renderQrCode(url) {
       qrFrame.classList.remove('hidden');
       qrStatusBlock.classList.remove('hidden');
-      qrOverlay.classList.remove('visible');
-      qrOverlay.setAttribute('aria-hidden', 'true');
-      await QRCode.toCanvas(qrCanvas, url, {
-        width: 280,
-        margin: 2,
-        color: {
-          dark: '#ffffff',
-          light: '#00000000',
-        },
-      });
+      qrOverlay.classList.add('hidden');
+      qrOverlay.classList.remove('flex');
+      await QRCode.toCanvas(qrCanvas, url, { width: 280, margin: 2, color: { dark: '#1e293b', light: '#ffffff' } });
     }
 
     async function fetchStatus() {
-      const response = await fetch('/api/weixin/status', { cache: 'no-store' });
-      if (!response.ok) {
-        throw new Error('Failed to load WeChat status');
-      }
-      const data = await response.json();
+      const res = await fetch('/api/weixin/status', { cache: 'no-store' });
+      if (!res.ok) throw new Error('无法加载状态');
+      const data = await res.json();
       state.accounts = Array.isArray(data.accounts) ? data.accounts : [];
       renderSummary();
       renderAccounts();
@@ -706,50 +226,40 @@
 
     function openModal(trigger) {
       state.modalOpen = true;
-      state.lastTrigger = trigger || document.activeElement;
+      state.lastTrigger = trigger;
       modalBackdrop.hidden = false;
-      requestAnimationFrame(() => modalBackdrop.classList.add('open'));
-      modalCancel.focus();
+      modalBackdrop.classList.remove('hidden');
+      modalBackdrop.classList.add('flex');
       document.body.style.overflow = 'hidden';
+      modalCancel.focus();
     }
 
     function closeModal() {
       if (!state.modalOpen) return;
       state.modalOpen = false;
-      modalBackdrop.classList.remove('open');
+      modalBackdrop.classList.add('hidden');
+      modalBackdrop.classList.remove('flex');
+      modalBackdrop.hidden = true;
       document.body.style.overflow = '';
-      setTimeout(() => {
-        if (!state.modalOpen) modalBackdrop.hidden = true;
-      }, 240);
-      if (state.lastTrigger && typeof state.lastTrigger.focus === 'function') {
-        state.lastTrigger.focus();
-      }
+      if (state.lastTrigger?.focus) state.lastTrigger.focus();
     }
 
     async function startLoginFlow() {
       setPrimaryLoading(true);
       resetQrVisuals();
       state.pollAbort = false;
-
       try {
-        const response = await fetch('/api/weixin/qr/start', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
-        });
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.error || 'Failed to start QR login');
-        }
-
+        const res = await fetch('/api/weixin/qr/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || '无法生成二维码');
         state.currentSession = data.sessionId;
         await renderQrCode(data.qrUrl);
-        setQrState('waiting', 'Waiting for scan…', 'Scan the QR code in WeChat to continue.');
+        setQrState('waiting', '等待扫码…', '请使用微信扫描二维码。');
         closeModal();
         pollQrStatus();
-      } catch (error) {
+      } catch (e) {
         qrStatusBlock.classList.remove('hidden');
-        setQrState('error', 'Unable to generate QR code', error.message || 'Please try again.');
+        setQrState('error', '生成失败', e.message);
       } finally {
         setPrimaryLoading(false);
       }
@@ -758,68 +268,47 @@
     async function pollQrStatus() {
       const session = state.currentSession;
       if (!session || state.pollAbort) return;
-
       try {
-        const response = await fetch(`/api/weixin/qr/status?session=${encodeURIComponent(session)}`, { cache: 'no-store' });
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.error || 'Failed to get QR status');
-        }
-
+        const res = await fetch(`/api/weixin/qr/status?session=${encodeURIComponent(session)}`, { cache: 'no-store' });
+        const data = await res.json();
         if (state.currentSession !== session || state.pollAbort) return;
 
         if (data.status === 'confirmed') {
-          setQrState('connected', '✅ Connected!', data.message || 'The account is now connected.', data.accountId || null);
+          setQrState('connected', '✅ 连接成功!', data.message || '账号已连接。', data.accountId);
           await fetchStatus().catch(() => {});
           return;
         }
-
         if (data.status === 'expired') {
-          setQrState('expired', 'Expired — click to refresh', data.message || 'This QR code is no longer valid.');
-          qrOverlay.classList.add('visible');
-          qrOverlay.setAttribute('aria-hidden', 'false');
+          setQrState('expired', '二维码已过期', data.message);
+          qrOverlay.classList.remove('hidden');
+          qrOverlay.classList.add('flex');
           return;
         }
-
         if (data.status === 'scaned') {
-          setQrState('scanned', 'Scanned! Confirm on phone…', data.message || 'Please confirm the login on the phone.');
+          setQrState('scanned', '已扫码，请在手机上确认…', data.message);
         } else {
-          setQrState('waiting', 'Waiting for scan…', data.message || 'Scan the QR code in WeChat to continue.');
+          setQrState('waiting', '等待扫码…', data.message || '请使用微信扫描二维码。');
         }
-
-        setTimeout(() => {
-          if (!state.pollAbort && state.currentSession === session) {
-            pollQrStatus();
-          }
-        }, 3000);
-      } catch (error) {
+        setTimeout(() => { if (!state.pollAbort && state.currentSession === session) pollQrStatus(); }, 3000);
+      } catch (e) {
         if (state.currentSession !== session || state.pollAbort) return;
-        setQrState('error', 'Login status unavailable', error.message || 'Please try again.');
-        qrOverlay.classList.add('visible');
-        qrOverlay.setAttribute('aria-hidden', 'false');
+        setQrState('error', '状态查询失败', e.message);
+        qrOverlay.classList.remove('hidden');
+        qrOverlay.classList.add('flex');
       }
     }
 
-    linkButton.addEventListener('click', (event) => openModal(event.currentTarget));
-    overlayRefreshButton.addEventListener('click', (event) => openModal(event.currentTarget));
+    linkButton.addEventListener('click', e => openModal(e.currentTarget));
+    overlayRefreshButton.addEventListener('click', e => openModal(e.currentTarget));
     modalCancel.addEventListener('click', closeModal);
     modalConfirm.addEventListener('click', startLoginFlow);
+    modalBackdrop.addEventListener('click', e => { if (e.target === modalBackdrop) closeModal(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && state.modalOpen) { e.preventDefault(); closeModal(); } });
 
-    modalBackdrop.addEventListener('click', (event) => {
-      if (event.target === modalBackdrop) closeModal();
-    });
-
-    document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && state.modalOpen) {
-        event.preventDefault();
-        closeModal();
-      }
-    });
-
-    fetchStatus().catch((error) => {
-      summaryBanner.className = 'summary-banner warning';
-      summaryText.textContent = error.message || 'Unable to load account status.';
-      accountList.innerHTML = `<div class="empty-state">${escapeHtml(error.message || 'Unable to load account status.')}</div>`;
+    fetchStatus().catch(e => {
+      summaryBanner.className = 'mb-4 rounded-lg p-3 text-sm bg-red-50 border border-red-200 text-red-600';
+      summaryBanner.textContent = e.message || '无法加载账号状态。';
+      accountList.innerHTML = `<div class="text-sm text-slate-400 p-3 border border-dashed border-slate-200 rounded-lg">${escapeHtml(e.message)}</div>`;
     });
   </script>
 </body>
