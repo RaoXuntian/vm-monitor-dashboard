@@ -60,8 +60,8 @@
           <div class="text-sm font-semibold text-slate-700" id="oc-sessions">--</div>
         </div>
         <div class="bg-slate-50 rounded-lg p-2.5">
-          <div class="text-xs text-slate-400">Heartbeat</div>
-          <div class="text-sm font-semibold text-slate-700" id="oc-heartbeat">--</div>
+          <div class="text-xs text-slate-400">Update</div>
+          <div class="text-sm font-semibold text-slate-700 truncate" id="oc-update" title="">--</div>
         </div>
         <div class="bg-slate-50 rounded-lg p-2.5">
           <div class="text-xs text-slate-400">Dashboard</div>
@@ -171,7 +171,7 @@
       $('gateway-service-name').textContent = oc.gatewayService || '--';
       $('oc-version').textContent = oc.version || '--';
       $('oc-sessions').textContent = String(oc.sessions ?? '--');
-      $('oc-heartbeat').textContent = oc.heartbeat || 'N/A';
+      var _upd = oc.update || '--'; $('oc-update').textContent = _upd; $('oc-update').title = _upd;
       $('oc-dashboard').textContent = oc.dashboard || '--';
       var _ts = oc.tailscale || '--'; $('oc-tailscale').textContent = _ts; $('oc-tailscale').title = _ts;
     }
