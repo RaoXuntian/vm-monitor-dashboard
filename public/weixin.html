@@ -19,7 +19,12 @@
         </a>
         <h1 class="text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">OpenClaw Management</h1>
       </div>
-      <div id="stream-status" class="px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200">Connecting…</div>
+      <div class="flex items-center gap-3">
+        <button onclick="refreshAll()" class="px-3 py-1 text-xs font-medium rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition flex items-center gap-1" title="Refresh all sections">
+          <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Refresh
+        </button>
+        <div id="stream-status" class="px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200">Connecting…</div>
+      </div>
     </div>
   </nav>
 
@@ -200,13 +205,35 @@
       `).join('');
     }
 
-    // --- Fetch initial weixin status ---
+    // --- Fetch initial data ---
+    fetch('/api/latest').then(r => r.json()).then(data => {
+      const oc = data.openclaw;
+      if (oc) updateGatewayStatus(oc);
+      if (oc?.weixin) updateWeixinStatus(oc.weixin);
+    }).catch(() => {});
     fetch('/api/weixin/status').then(r => r.json()).then(data => {
       if (data.accounts) renderAccounts(data.accounts);
-      if (data.state) {
-        updateWeixinStatus(data);
-      }
+      if (data.state) updateWeixinStatus(data);
     }).catch(() => {});
+
+    // --- Refresh ---
+    async function refreshAll() {
+      try {
+        const [latestRes, statusRes, peersRes] = await Promise.all([
+          fetch('/api/latest'),
+          fetch('/api/weixin/status'),
+          fetch('/api/weixin/peers'),
+        ]);
+        const latest = await latestRes.json();
+        const status = await statusRes.json();
+        const peers = await peersRes.json();
+        const oc = latest.openclaw;
+        if (oc) updateGatewayStatus(oc);
+        if (status.accounts) renderAccounts(status.accounts);
+        if (status.state) updateWeixinStatus(status);
+        loadPeers(); // refresh peers list
+      } catch(e) { console.error('refresh failed', e); }
+    }
 
     // --- Actions ---
     function showModal(title, content) {
