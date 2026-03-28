@@ -17,18 +17,20 @@ node server.js
 # Open http://127.0.0.1:3000
 ```
 
-> **Note:** The server binds to `127.0.0.1` (loopback) only. It is not accessible from external networks. For external access, put it behind a reverse proxy such as [Caddy](https://caddyserver.com/).
+> **Note:** The server binds to `127.0.0.1` (loopback) by default. Set `HOST=0.0.0.0` only if you intentionally expose it; for remote access, prefer a reverse proxy such as [Caddy](https://caddyserver.com/).
 
 ## Systemd Service
 
-The unit file is pre-installed on this VM at `/etc/systemd/system/vm-monitor-dashboard.service`.
+This repo does **not** ship a unit file. Save one (e.g. `/etc/systemd/system/vm-monitor-dashboard.service` for system scope, or `~/.config/systemd/user/` for user scope) using the example below, then reload systemd and manage it as usual:
 
 ```bash
-sudo systemctl start vm-monitor-dashboard.service
-sudo systemctl stop vm-monitor-dashboard.service
-sudo systemctl restart vm-monitor-dashboard.service
-systemctl status vm-monitor-dashboard.service
-journalctl -u vm-monitor-dashboard.service -f
+# For a system-wide service
+sudo systemctl daemon-reload
+sudo systemctl enable --now vm-monitor-dashboard.service
+sudo systemctl status vm-monitor-dashboard.service
+sudo journalctl -u vm-monitor-dashboard.service -f
+
+# For a user service, drop sudo and use: systemctl --user ...
 ```
 
 <details>
@@ -46,6 +48,7 @@ WorkingDirectory=/home/xtrao/repos/vm-monitor-dashboard
 ExecStart=/usr/bin/node server.js
 Restart=on-failure
 Environment=PORT=3000
+Environment=HOST=127.0.0.1
 
 [Install]
 WantedBy=multi-user.target
@@ -69,10 +72,9 @@ WantedBy=multi-user.target
 | Variable | Default | Description |
 |---|---|---|
 | `PORT` | `3000` | HTTP listen port |
+| `HOST` | `127.0.0.1` | HTTP listen host (`0.0.0.0` if not behind a proxy) |
 | `SAMPLE_INTERVAL_MS` | `10000` | Metrics collection interval |
 | `OPENCLAW_STATUS_INTERVAL_MS` | `60000` | OpenClaw status polling interval |
-
-> **Note:** The server always binds to `127.0.0.1` (hardcoded). Use a reverse proxy (e.g. Caddy) for external access.
 
 ## API Endpoints
 
@@ -91,7 +93,7 @@ WantedBy=multi-user.target
 
 ### Actions API
 
-All actions require `POST` with body `{"confirm": true}`.
+Endpoint is `POST /api/actions/{action}`. Supported `action` values are:
 
 | Action | Description |
 |---|---|
@@ -99,6 +101,8 @@ All actions require `POST` with body `{"confirm": true}`.
 | `openclaw-logs` | Fetch recent OpenClaw gateway logs |
 | `weixin-restart` | Restart the WeChat channel |
 | `weixin-logs` | Fetch recent WeChat channel logs |
+
+All actions must include JSON body `{"confirm": true}`; requests without it are rejected. Responses include merged stdout/stderr from the underlying command.
 
 Example:
 
